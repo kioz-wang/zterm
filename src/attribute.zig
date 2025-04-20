@@ -1,6 +1,7 @@
 const std = @import("std");
 const helper = @import("helper.zig");
 const print = helper.Alias.print;
+const String = helper.Alias.String;
 const LiteralString = helper.Alias.LiteralString;
 const FormatOptions = helper.Alias.FormatOptions;
 const anyFormat = helper.Formatter.anyFormat;
@@ -8,6 +9,9 @@ const intFormat_d = helper.Formatter.intFormat_d;
 const enumFormat_d = helper.Formatter.enumFormat_d;
 const parameter = @import("parameter.zig");
 const SGR = parameter.SGR;
+const Color8 = SGR.Color.Color8;
+const Color256 = SGR.Color.ColorX.Color256;
+const ColorRGB = SGR.Color.ColorX.ColorRGB;
 const control = @import("control.zig");
 
 pub const Style = struct {
@@ -89,9 +93,6 @@ pub const Style = struct {
 
 pub const Color = struct {
     const Self = @This();
-    const Color8 = SGR.Color.Color8;
-    const Color256 = SGR.Color.ColorX.Color256;
-    const ColorRGB = SGR.Color.ColorX.ColorRGB;
     const Storage = union(enum) {
         default,
         color8: Color8,
@@ -111,12 +112,6 @@ pub const Color = struct {
     pub fn color256(c: u8) Self {
         return .{ .storage = .{ .color256 = .{ .c = c } } };
     }
-    pub fn colorIBGR(c: Color256.IBGR) Self {
-        return color256(@intFromEnum(c));
-    }
-    pub fn colorGrayscale(c: Color256.Grayscale) Self {
-        return color256(@intFromEnum(c));
-    }
     pub fn colorRGB(r: u8, g: u8, b: u8) Self {
         return .{ .storage = .{ .colorRGB = .{ .r = r, .g = g, .b = b } } };
     }
@@ -129,6 +124,27 @@ pub const Color = struct {
         var obj = self;
         obj.background = true;
         return obj;
+    }
+
+    pub fn colorIBGR(c: Color256.IBGR) Self {
+        return color256(@intFromEnum(c));
+    }
+    pub fn colorGrayscale(c: Color256.Grayscale) Self {
+        return color256(@intFromEnum(c));
+    }
+    pub fn colorHex(c: u24) Self {
+        const endian = @import("builtin").target.cpu.arch.endian();
+        const rgb: [*]const u8 = @ptrCast(&c);
+        return colorRGB(
+            rgb[if (endian == .little) 2 else 0],
+            rgb[1],
+            rgb[if (endian == .little) 0 else 2],
+        );
+    }
+    pub fn colorHexS(s: String) std.fmt.ParseIntError!Self {
+        const raw_s = if (std.ascii.startsWithIgnoreCase(s, "0x")) s[2..] else if (s[0] == '#') s[1..] else s;
+        const c = try std.fmt.parseInt(u24, raw_s, 16);
+        return colorHex(c);
     }
 
     pub fn format(self: Self, comptime _: []const u8, _: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
@@ -152,9 +168,6 @@ pub const Color = struct {
                     inline .color256, .colorRGB => |c| {
                         return anyFormat(c, writer);
                     },
-                    // .colorRGB => |c| {
-                    //     return anyFormat(c, writer);
-                    // },
                     else => unreachable,
                 }
             },
@@ -177,6 +190,12 @@ pub const Color = struct {
             try testing.expectEqual(color256(9).bg(), color256(9).fg().bg());
             try testing.expectEqual(color256(13), colorIBGR(.fuchsia));
             try testing.expectEqual(color256(231), colorGrayscale(.grey100));
+            try testing.expectEqual(colorRGB(1, 2, 3), colorHex(0x010203));
+            try testing.expectEqual(colorRGB(1, 2, 3), colorHexS("#010203"));
+            try testing.expectEqual(colorRGB(1, 2, 3), colorHexS("010203"));
+            try testing.expectEqual(colorRGB(1, 2, 3), colorHexS("0x010203"));
+            try testing.expectEqual(colorRGB(1, 2, 3), colorHexS("0x10203"));
+            try testing.expectEqual(colorRGB(1, 2, 3), comptime colorHexS("0x10203"));
         }
     };
 };
@@ -326,18 +345,6 @@ pub const Attribute = struct {
     pub fn bgColor256(self: Self, c: u8) Self {
         return self.bgColor(Color.color256(c));
     }
-    pub fn colorIBGR(self: Self, c: SGR.Color.ColorX.Color256.IBGR) Self {
-        return self.color(Color.colorIBGR(c));
-    }
-    pub fn bgColorIBGR(self: Self, c: SGR.Color.ColorX.Color256.IBGR) Self {
-        return self.bgColor(Color.colorIBGR(c));
-    }
-    pub fn colorGrayscale(self: Self, c: SGR.Color.ColorX.Color256.Grayscale) Self {
-        return self.color(Color.colorGrayscale(c));
-    }
-    pub fn bgColorGrayscale(self: Self, c: SGR.Color.ColorX.Color256.Grayscale) Self {
-        return self.bgColor(Color.colorGrayscale(c));
-    }
 
     pub fn colorRGB(self: Self, r: u8, g: u8, b: u8) Self {
         return self.color(Color.colorRGB(r, g, b));
@@ -387,10 +394,6 @@ pub const Attribute = struct {
         test "Attribute color256 APIs" {
             try testing.expectEqual(new().color256(1), new().color(Color.color256(1)));
             try testing.expectEqual(new().bgColor256(1), new().bgColor(Color.color256(1)));
-            try testing.expectEqual(new().colorIBGR(.fuchsia), new().color(Color.colorIBGR(.fuchsia)));
-            try testing.expectEqual(new().bgColorIBGR(.fuchsia), new().bgColor(Color.colorIBGR(.fuchsia)));
-            try testing.expectEqual(new().colorGrayscale(.grey100), new().color(Color.colorGrayscale(.grey100)));
-            try testing.expectEqual(new().bgColorGrayscale(.grey100), new().bgColor(Color.colorGrayscale(.grey100)));
         }
         test "Attribute colorRGB APIs" {
             try testing.expectEqual(new().colorRGB(1, 2, 3), new().color(Color.colorRGB(1, 2, 3)));

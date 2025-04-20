@@ -11,13 +11,14 @@ pub fn build(b: *std.Build) void {
     });
 
     const test_step = b.step("test", "Run unit tests");
-    const run_lib_unit_tests = b.addRunArtifact(
-        b.addTest(.{
-            .root_module = lib_mod,
-        }),
-    );
-    run_lib_unit_tests.skip_foreign_checks = true;
-    test_step.dependOn(&run_lib_unit_tests.step);
+    const files_contain_ut = [_][]const u8{ "src/attribute.zig", "src/parameter.zig" };
+    for (files_contain_ut) |file_ut| {
+        const run_ut = b.addRunArtifact(
+            b.addTest(.{ .root_source_file = b.path(file_ut) }),
+        );
+        run_ut.skip_foreign_checks = true;
+        test_step.dependOn(&run_ut.step);
+    }
 
     const doc = b.addObject(.{
         .name = "doc",
