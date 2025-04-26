@@ -1,12 +1,16 @@
 const std = @import("std");
 const helper = @import("helper.zig");
 const print = helper.Alias.print;
+const sprint = helper.Alias.sprint;
 const String = helper.Alias.String;
 const LiteralString = helper.Alias.LiteralString;
 const FormatOptions = helper.Alias.FormatOptions;
 const anyFormat = helper.Formatter.anyFormat;
 const intFormat_d = helper.Formatter.intFormat_d;
 const enumFormat_d = helper.Formatter.enumFormat_d;
+const RawFormatter = helper.Formatter.RawFormatter;
+const rawFormatter = helper.Formatter.rawFormatter;
+const Flag = helper.Env.Flag;
 const parameter = @import("parameter.zig");
 const SGR = parameter.SGR;
 const Color8 = SGR.Color.Color8;
@@ -207,8 +211,10 @@ pub const Attribute = struct {
         color: ?Color = null,
         bgColor: ?Color = null,
     };
-    _trust: bool = false,
     storage: Storage,
+    _trust: bool = false,
+    _no_color: ?bool = null,
+    _no_style: ?bool = null,
 
     pub fn new() Self {
         return .{ .storage = .{} };
@@ -217,6 +223,16 @@ pub const Attribute = struct {
     pub fn trust(self: Self) Self {
         var obj = self;
         obj._trust = true;
+        return obj;
+    }
+    pub fn no_color(self: Self, b: bool) Self {
+        var obj = self;
+        obj._no_color = b;
+        return obj;
+    }
+    pub fn no_style(self: Self, b: bool) Self {
+        var obj = self;
+        obj._no_style = b;
         return obj;
     }
     pub const reset = new();
@@ -236,7 +252,7 @@ pub const Attribute = struct {
         return self.field_set(@src().fn_name, v.bg());
     }
 
-    pub fn format(self: Self, comptime _: []const u8, _: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
+    pub fn rawFormat(self: Self, comptime _: []const u8, _: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
         try anyFormat(control.ESCSequence.CSI, writer);
         var first = true;
         if (!self._trust) {
@@ -253,6 +269,23 @@ pub const Attribute = struct {
             }
         }
         try anyFormat(control.CSISequenceFunction.SGR, writer);
+    }
+    pub fn raw(self: Self) RawFormatter(Self) {
+        return rawFormatter(self);
+    }
+    pub fn format(self: Self, comptime _: []const u8, _: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
+        if (self._no_color orelse Flag("NO_COLOR").check() and
+            self._no_style orelse Flag("NO_STYLE").check())
+            return;
+        var obj = self;
+        if (self._no_color orelse Flag("NO_COLOR").check()) {
+            obj.storage.color = null;
+            obj.storage.bgColor = null;
+        }
+        if (self._no_style orelse Flag("NO_STYLE").check()) {
+            obj.storage.style = null;
+        }
+        try obj.rawFormat(undefined, undefined, writer);
     }
 
     fn field_style_set(self: Self, comptime name: LiteralString) Self {
@@ -360,26 +393,29 @@ pub const Attribute = struct {
                 "\x1b[0;1;34m",
                 print("{}", .{comptime new()
                     .style(Style.new().set(.bold, true))
-                    .color(Color.color8(.blue, false))}),
+                    .color(Color.color8(.blue, false))
+                    .raw()}),
             );
             try testing.expectEqualStrings(
                 "\x1b[1;3;39;107m",
                 print("{}", .{comptime new().trust()
                     .style(Style.new().set(.bold, true).set(.italic, true))
                     .color(Color.default)
-                    .bgColor(Color.color8(.white, true))}),
+                    .bgColor(Color.color8(.white, true))
+                    .raw()}),
             );
             try testing.expectEqualStrings(
                 "\x1b[1;38;2;1;2;3m",
                 print("{}", .{comptime new().trust()
                     .style(Style.new().set(.bold, true))
-                    .color(Color.colorRGB(1, 2, 3))}),
+                    .color(Color.colorRGB(1, 2, 3))
+                    .raw()}),
             );
         }
         test "Attribute style APIs" {
             try testing.expectEqualStrings(
                 "\x1b[0;1;21m",
-                print("{}", .{comptime new().bold().underline()}),
+                print("{}", .{comptime new().bold().underline().raw()}),
             );
         }
         test "Attribute color8 APIs" {
@@ -388,8 +424,8 @@ pub const Attribute = struct {
             try testing.expectEqual(new().brightColor8(.blue), new().color(Color.color8(.blue, true)));
             try testing.expectEqual(new().bgBrightColor8(.blue), new().bgColor(Color.color8(.blue, true)));
             try testing.expectEqual(new().blue(), new().color8(.blue));
-            try testing.expectEqualStrings("\x1b[30m", print("{}", .{comptime new().black().trust()}));
-            try testing.expectEqualStrings("\x1b[41m", print("{}", .{comptime new().bgColor8(.red).trust()}));
+            try testing.expectEqualStrings("\x1b[30m", print("{}", .{comptime new().black().trust().raw()}));
+            try testing.expectEqualStrings("\x1b[41m", print("{}", .{comptime new().bgColor8(.red).trust().raw()}));
         }
         test "Attribute color256 APIs" {
             try testing.expectEqual(new().color256(1), new().color(Color.color256(1)));
@@ -400,8 +436,16 @@ pub const Attribute = struct {
             try testing.expectEqual(new().bgColorRGB(1, 2, 3), new().bgColor(Color.colorRGB(1, 2, 3)));
             try testing.expectEqualStrings(
                 "\x1b[38;2;1;2;3m",
-                print("{}", .{comptime new().trust().colorRGB(1, 2, 3)}),
+                print("{}", .{comptime new().trust().colorRGB(1, 2, 3).raw()}),
             );
+            {
+                var buffer0: [32]u8 = undefined;
+                var buffer1: [32]u8 = undefined;
+                try testing.expectEqualStrings(
+                    try sprint(&buffer0, "{}", .{new().trust().colorRGB(1, 2, 3).bold().no_style(true).no_color(false)}),
+                    try sprint(&buffer1, "{}", .{new().trust().colorRGB(1, 2, 3).italic().no_style(true).no_color(false)}),
+                );
+            }
         }
     };
 
@@ -416,7 +460,6 @@ pub const Attribute = struct {
 pub fn Value(T: type) type {
     return struct {
         attribute: Attribute,
-        _keep: bool = false,
         value: T,
 
         const Self = @This();
@@ -424,18 +467,17 @@ pub fn Value(T: type) type {
         pub fn new(attr: Attribute, value: T) Self {
             return .{ .attribute = attr, .value = value };
         }
-        pub fn keep(self: Self) Self {
-            var obj = self;
-            obj._keep = true;
-            return obj;
-        }
 
+        pub fn rawFormat(self: Self, comptime fmt: []const u8, options: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
+            try anyFormat(self.attribute.raw(), writer);
+            try std.fmt.formatType(self.value, fmt, options, writer, std.fmt.default_max_depth);
+        }
+        pub fn raw(self: Self) RawFormatter(Self) {
+            return rawFormatter(self);
+        }
         pub fn format(self: Self, comptime fmt: []const u8, options: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
             try anyFormat(self.attribute, writer);
             try std.fmt.formatType(self.value, fmt, options, writer, std.fmt.default_max_depth);
-            if (!self._keep) {
-                try anyFormat(Attribute.reset, writer);
-            }
         }
     };
 }
@@ -445,7 +487,6 @@ pub fn AttrWriter(W: type) type {
 
     return struct {
         attribute: Attribute,
-        _keep: bool = false,
         inner: W,
 
         const Self = @This();
@@ -453,18 +494,10 @@ pub fn AttrWriter(W: type) type {
         pub fn new(attr: Attribute, writer: W) Self {
             return .{ .attribute = attr, .inner = writer };
         }
-        pub fn keep(self: Self) Self {
-            var obj = self;
-            obj._keep = true;
-            return obj;
-        }
 
         pub fn print(self: Self, comptime fmt: []const u8, args: anytype) W.Error!void {
             try anyFormat(self.attribute, self.inner);
             try self.inner.print(fmt, args);
-            if (!self._keep) {
-                try anyFormat(Attribute.reset, self.inner);
-            }
         }
         pub fn positioner(self: Self) PosiWriter(Self) {
             return .new(self);
@@ -474,32 +507,32 @@ pub fn AttrWriter(W: type) type {
 
 const _test = struct {
     const testing = std.testing;
-    const Preset = Attribute.new().trust().bold().green().bgColor8(.white).underline();
+    const Preset = Attribute.new().bold().green().bgColor8(.white).underline();
     test "Rich String" {
         try testing.expectEqualStrings(
-            "\x1b[1;21;32;47mhello\x1b[0m",
-            print("{s}", .{comptime Preset.value("hello")}),
+            "\x1b[1;21;32;47mhello",
+            print("{s}", .{comptime Preset.trust().value("hello").raw()}),
         );
     }
     test "Rich int" {
         try testing.expectEqualStrings(
-            "\x1b[1;21;32;47m00c1\x1b[0m",
-            print("{x:04}", .{comptime Preset.value(0xc1)}),
+            "\x1b[1;21;32;47m00c1",
+            print("{x:04}", .{comptime Preset.trust().value(0xc1).raw()}),
         );
     }
     test "Rich bool" {
         try testing.expectEqualStrings(
-            "\x1b[1;21;32;47mtrue",
-            print("{}", .{comptime Preset.value(true).keep()}),
+            "\x1b[0;1;21;32;47mtrue",
+            print("{}", .{comptime Preset.value(true).raw()}),
         );
     }
     test AttrWriter {
         var buffer = std.mem.zeroes([512]u8);
         var bufferStream = std.io.fixedBufferStream(&buffer);
-        const writer = Preset.apply(bufferStream.writer());
+        const writer = Preset.trust().apply(bufferStream.writer());
         try writer.print("string {s} int {d}", .{ "hello", 6 });
         try testing.expectEqualStrings(
-            "\x1b[1;21;32;47mstring hello int 6\x1b[0m",
+            "\x1b[1;21;32;47mstring hello int 6",
             std.mem.sliceTo(&buffer, 0),
         );
     }
