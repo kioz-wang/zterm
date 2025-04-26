@@ -25,4 +25,4 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Test
-        run: zig build test
+        run: unset NO_COLOR; unset NO_STYLE; zig build test
