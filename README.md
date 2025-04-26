@@ -2,7 +2,7 @@
 
 A Zig implementation of [console_codes (4)](https://www.man7.org/linux/man-pages/man4/console_codes.4.html).
 
-![asciicast](cli/zterm_cli.gif)
+![asciicast](.asset/zterm_cli.gif)
 
 ## Features
 
