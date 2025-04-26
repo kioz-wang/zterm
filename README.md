@@ -2,7 +2,7 @@
 
 A Zig implementation of [console_codes (4)](https://www.man7.org/linux/man-pages/man4/console_codes.4.html).
 
-[![asciicast](https://asciinema.org/a/1umhJ7HZIcBAIOdEp53WD7lk7.svg)](https://asciinema.org/a/1umhJ7HZIcBAIOdEp53WD7lk7)
+![asciicast](cli/zterm_cli.gif)
 
 ## Features
 
@@ -12,12 +12,12 @@ A Zig implementation of [console_codes (4)](https://www.man7.org/linux/man-pages
   - Can be wrapped around any value needing formatting
   - Wrappable to standard output to apply attributes to every `print` call
 - Cursor position control (absolute & relative)
+- support [`NO_COLOR`](https://no-color.org/)
+  - also, support `NO_STYLE`!
 
 ### Plans
 
-- [ ] [`NO_COLOR`](https://no-color.org/) support
-- [ ] Accept intput
-- [ ] Get display size, get mouse position
+See [issues](https://github.com/kioz-wang/zterm/issues?q=is%3Aissue%20state%3Aopen%20label%3Aenhancement).
 
 ## Installation
 
@@ -83,11 +83,13 @@ See https://kioz-wang.github.io/zterm/#doc
 
 ## Examples
 
+See builtin demo: `zig build run -- -h`
+
 > Welcome to submit PRs to link your project that use `zterm`!
 
 More real-world examples are coming!
 
-- [zterm_cli](https://github.com/kioz-wang/zterm_cli)
+- emmm...
 
 ## License
 
