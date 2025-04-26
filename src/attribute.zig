@@ -529,7 +529,7 @@ const _test = struct {
     test AttrWriter {
         var buffer = std.mem.zeroes([512]u8);
         var bufferStream = std.io.fixedBufferStream(&buffer);
-        const writer = Preset.trust().apply(bufferStream.writer());
+        const writer = Preset.trust().no_color(false).no_style(false).apply(bufferStream.writer());
         try writer.print("string {s} int {d}", .{ "hello", 6 });
         try testing.expectEqualStrings(
             "\x1b[1;21;32;47mstring hello int 6",
