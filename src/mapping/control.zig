@@ -1,9 +1,7 @@
 const std = @import("std");
-const helper = @import("helper.zig");
-const print = helper.Alias.print;
-const FormatOptions = helper.Alias.FormatOptions;
-const anyFormat = helper.Formatter.anyFormat;
-const enumFormat_c = helper.Formatter.enumFormat_c;
+const alias = @import("helper").alias;
+const FormatOptions = alias.FormatOptions;
+const formatter = @import("helper").formatter;
 
 pub const ControlCharater = enum(u8) {
     const Self = @This();
@@ -41,8 +39,9 @@ pub const ControlCharater = enum(u8) {
         return writer.writeByte(@intFromEnum(self));
     }
 
-    const _test = struct {
+    pub const _test = struct {
         const testing = std.testing;
+        const print = alias.print;
         test ControlCharater {
             try testing.expectEqual(0x0F, @intFromEnum(ControlCharater.SI));
             try testing.expectEqual(0x1B, @intFromEnum(ControlCharater.ESC));
@@ -79,8 +78,8 @@ pub const ESCSequence = enum(u8) {
     CSI = '[',
 
     pub fn format(self: ESCSequence, comptime _: []const u8, _: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
-        try anyFormat(ControlCharater.ESC, writer);
-        return enumFormat_c(self, writer);
+        try formatter.any(ControlCharater.ESC, writer);
+        return formatter.cEnum(self, writer);
     }
 
     /// `%` Start sequence selecting character set
@@ -150,13 +149,14 @@ pub const ESCSequence = enum(u8) {
         };
     }
     fn format_with_pre(v: anytype, pre: u8, writer: anytype) @TypeOf(writer).Error!void {
-        try anyFormat(ControlCharater.ESC, writer);
+        try formatter.any(ControlCharater.ESC, writer);
         try writer.writeByte(pre);
-        return enumFormat_c(v, writer);
+        return formatter.cEnum(v, writer);
     }
 
-    const _test = struct {
+    pub const _test = struct {
         const testing = std.testing;
+        const print = alias.print;
         test ESCSequence {
             try testing.expectEqual(']', @intFromEnum(ESCSequence.OSC));
             try testing.expectEqualStrings("\x1b]", print("{}", .{ESCSequence.OSC}));
@@ -249,25 +249,20 @@ pub const CSISequenceFunction = enum(u8) {
     HPA = '`',
 
     pub fn format(self: Self, comptime _: []const u8, _: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
-        return enumFormat_c(self, writer);
+        return formatter.cEnum(self, writer);
     }
     pub fn param(self: Self, writer: anytype, comptime fmt: []const u8, args: anytype) @TypeOf(writer).Error!void {
-        try anyFormat(ESCSequence.CSI, writer);
+        try formatter.any(ESCSequence.CSI, writer);
         try writer.print(fmt, args);
-        try anyFormat(self, writer);
+        try formatter.any(self, writer);
     }
 
-    const _test = struct {
+    pub const _test = struct {
         const testing = std.testing;
+        const print = alias.print;
         test CSISequenceFunction {
             try testing.expectEqual('m', @intFromEnum(Self.SGR));
             try testing.expectEqualStrings("m", print("{}", .{Self.SGR}));
         }
     };
 };
-
-test {
-    _ = ControlCharater._test;
-    _ = ESCSequence._test;
-    _ = CSISequenceFunction._test;
-}

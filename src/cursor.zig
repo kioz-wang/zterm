@@ -1,4 +1,4 @@
-const F = @import("control.zig").CSISequenceFunction;
+const F = @import("mapping").F;
 
 pub fn apply(w: anytype) CursorWriter(@TypeOf(w)) {
     return .new(w);
@@ -41,7 +41,7 @@ pub fn CursorWriter(W: type) type {
         }
         pub fn moveAt(self: Self, _row: u32, _column: u32) W.Error!void {
             // same as `F.HVP`
-            try F.CUP.param(self.inner, "{d}{c}{d}", .{ _row, @import("parameter.zig").sep, _column });
+            try F.CUP.param(self.inner, "{d}{c}{d}", .{ _row, @import("mapping").par.sep, _column });
         }
         pub fn save(self: Self) W.Error!void {
             try F.CUS.param(self.inner, "", .{});

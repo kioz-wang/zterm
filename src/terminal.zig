@@ -1,11 +1,10 @@
 const std = @import("std");
-const parameter = @import("parameter.zig");
-const attribute = @import("attribute.zig");
-const Attribute = attribute.Attribute;
-const AttrWriter = attribute.AttrWriter;
-const CursorWriter = @import("cursor.zig").CursorWriter;
-const PosiWriter = @import("cursor.zig").PosiWriter;
-const F = @import("control.zig").CSISequenceFunction;
+const par = @import("mapping").par;
+const F = @import("mapping").F;
+const Attribute = @import("attr").Attribute;
+const AttrWriter = @import("attr").AttrWriter;
+const CursorWriter = @import("cursor").CursorWriter;
+const PosiWriter = @import("cursor").PosiWriter;
 
 pub fn apply(w: anytype) TermWriter(@TypeOf(w)) {
     return .new(w);
@@ -46,14 +45,14 @@ pub fn TermWriter(W: type) type {
         pub fn deleteColumnAt(self: Self, n: u32) W.Error!void {
             try F.DCH.param(self.inner, "{d}", .{n});
         }
-        pub fn eraseLine(self: Self, _el: ?parameter.EL) W.Error!void {
+        pub fn eraseLine(self: Self, _el: ?par.EL) W.Error!void {
             if (_el) |el| {
                 try F.EL.param(self.inner, "{d}", .{@intFromEnum(el)});
             } else {
                 try F.EL.param(self.inner, "", .{});
             }
         }
-        pub fn eraseDisplay(self: Self, _ed: ?parameter.ED) W.Error!void {
+        pub fn eraseDisplay(self: Self, _ed: ?par.ED) W.Error!void {
             if (_ed) |ed| {
                 try F.ED.param(self.inner, "{d}", .{@intFromEnum(ed)});
             } else {
@@ -63,10 +62,10 @@ pub fn TermWriter(W: type) type {
         pub fn eraseColumnAt(self: Self, n: u32) W.Error!void {
             try F.ECH.param(self.inner, "{d}", .{n});
         }
-        pub fn keyboardLED(self: Self, led: parameter.DECLL) W.Error!void {
+        pub fn keyboardLED(self: Self, led: par.DECLL) W.Error!void {
             try F.DECLL.param(self.inner, "{d}", .{@intFromEnum(led)});
         }
-        pub fn mode(self: Self, m: parameter.SM, set: bool) W.Error!void {
+        pub fn mode(self: Self, m: par.SM, set: bool) W.Error!void {
             const f = if (set) F.SM else F.RM;
             try f.param(self.inner, "{d}", .{@intFromEnum(m)});
         }

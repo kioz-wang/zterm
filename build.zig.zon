@@ -5,10 +5,11 @@
     .minimum_zig_version = "0.14.0",
 
     .dependencies = .{
-        .zargs = .{
-            .url = "git+https://github.com/kioz-wang/zargs#a9491901db2668990b177d24fc55329a88bb1c84",
-            .hash = "zargs-0.14.7-tqzWbg1qAgBjLV-R5akLCGQmo39z0rbTfMyrasS9AzmX",
-        },
+        // .zargs = .{
+        //     .url = "git+https://github.com/kioz-wang/zargs#a9491901db2668990b177d24fc55329a88bb1c84",
+        //     .hash = "zargs-0.14.7-tqzWbg1qAgBjLV-R5akLCGQmo39z0rbTfMyrasS9AzmX",
+        // },
+        .zargs = .{ .path = "../zargs" },
     },
 
     .paths = .{

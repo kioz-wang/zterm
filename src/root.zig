@@ -1,7 +1,7 @@
 const std = @import("std");
 
 const terminel = @import("terminal.zig");
-const attribute = @import("attribute.zig");
+const attribute = @import("attr");
 
 pub const Style = attribute.Style;
 pub const Color = attribute.Color;
