@@ -458,49 +458,49 @@ pub const Attribute = struct {
     }
 };
 
-pub fn Value(T: type) type {
+pub fn Value(V: type) type {
     return struct {
-        attribute: Attribute,
-        value: T,
+        a: Attribute,
+        v: V,
 
         const Self = @This();
 
-        pub fn new(attr: Attribute, value: T) Self {
-            return .{ .attribute = attr, .value = value };
+        pub fn new(attr: Attribute, value: V) Self {
+            return .{ .a = attr, .v = value };
         }
 
         pub fn rawFormat(self: Self, comptime fmt: []const u8, options: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
-            try formatAny(self.attribute.raw(), writer);
-            try std.fmt.formatType(self.value, fmt, options, writer, std.fmt.default_max_depth);
+            try formatAny(self.a.raw(), writer);
+            try std.fmt.formatType(self.v, fmt, options, writer, std.fmt.default_max_depth);
         }
         pub fn raw(self: Self) formatter.Raw(Self) {
             return formatter.raw(self);
         }
         pub fn format(self: Self, comptime fmt: []const u8, options: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
-            try formatAny(self.attribute, writer);
-            try std.fmt.formatType(self.value, fmt, options, writer, std.fmt.default_max_depth);
+            try formatAny(self.a, writer);
+            try std.fmt.formatType(self.v, fmt, options, writer, std.fmt.default_max_depth);
         }
     };
 }
 
 pub fn AttrWriter(W: type) type {
-    const PosiWriter = @import("cursor").PosiWriter;
+    const PosiPrinter = @import("cursor").PosiPrinter;
 
     return struct {
-        attribute: Attribute,
-        inner: W,
+        a: Attribute,
+        w: W,
 
         const Self = @This();
 
         pub fn new(attr: Attribute, writer: W) Self {
-            return .{ .attribute = attr, .inner = writer };
+            return .{ .a = attr, .w = writer };
         }
 
         pub fn print(self: Self, comptime fmt: []const u8, args: anytype) W.Error!void {
-            try formatAny(self.attribute, self.inner);
-            try self.inner.print(fmt, args);
+            try formatAny(self.a, self.w);
+            try self.w.print(fmt, args);
         }
-        pub fn positioner(self: Self) PosiWriter(Self) {
+        pub fn posiPrint(self: Self) PosiPrinter(Self) {
             return .new(self);
         }
     };

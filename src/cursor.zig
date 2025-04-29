@@ -1,4 +1,5 @@
 const F = @import("mapping").F;
+const assert = @import("helper").alias.assert;
 
 pub fn apply(w: anytype) CursorWriter(@TypeOf(w)) {
     return .new(w);
@@ -7,50 +8,51 @@ pub fn apply(w: anytype) CursorWriter(@TypeOf(w)) {
 pub fn CursorWriter(W: type) type {
     return struct {
         const Self = @This();
-        inner: W,
+        const Error = W.Error;
+        w: W,
 
         pub fn new(writer: W) Self {
-            return .{ .inner = writer };
+            return .{ .w = writer };
         }
-        pub fn up(self: Self, n: u32) W.Error!void {
-            try F.CUU.param(self.inner, "{d}", .{n});
+        pub fn up(self: Self, n: u32) Error!void {
+            try F.CUU.param(self.w, "{d}", .{n});
         }
-        pub fn down(self: Self, n: u32) W.Error!void {
+        pub fn down(self: Self, n: u32) Error!void {
             // same as `F.VPR`
-            try F.CUD.param(self.inner, "{d}", .{n});
+            try F.CUD.param(self.w, "{d}", .{n});
         }
-        pub fn right(self: Self, n: u32) W.Error!void {
+        pub fn right(self: Self, n: u32) Error!void {
             // same as `F.HPR`
-            try F.CUF.param(self.inner, "{d}", .{n});
+            try F.CUF.param(self.w, "{d}", .{n});
         }
-        pub fn left(self: Self, n: u32) W.Error!void {
-            try F.CUB.param(self.inner, "{d}", .{n});
+        pub fn left(self: Self, n: u32) Error!void {
+            try F.CUB.param(self.w, "{d}", .{n});
         }
-        pub fn upBegin(self: Self, n: u32) W.Error!void {
-            try F.CPL.param(self.inner, "{d}", .{n});
+        pub fn upBegin(self: Self, n: u32) Error!void {
+            try F.CPL.param(self.w, "{d}", .{n});
         }
-        pub fn downBegin(self: Self, n: u32) W.Error!void {
-            try F.CNL.param(self.inner, "{d}", .{n});
+        pub fn downBegin(self: Self, n: u32) Error!void {
+            try F.CNL.param(self.w, "{d}", .{n});
         }
-        pub fn columnAt(self: Self, n: u32) W.Error!void {
+        pub fn columnAt(self: Self, n: u32) Error!void {
             // same as `F.HPA`
-            try F.CHA.param(self.inner, "{d}", .{n});
+            try F.CHA.param(self.w, "{d}", .{n});
         }
-        pub fn rowAt(self: Self, n: u32) W.Error!void {
-            try F.VPA.param(self.inner, "{d}", .{n});
+        pub fn rowAt(self: Self, n: u32) Error!void {
+            try F.VPA.param(self.w, "{d}", .{n});
         }
-        pub fn moveAt(self: Self, _row: u32, _column: u32) W.Error!void {
+        pub fn moveAt(self: Self, _row: u32, _column: u32) Error!void {
             // same as `F.HVP`
-            try F.CUP.param(self.inner, "{d}{c}{d}", .{ _row, @import("mapping").par.sep, _column });
+            try F.CUP.param(self.w, "{d}{c}{d}", .{ _row, @import("mapping").par.sep, _column });
         }
-        pub fn save(self: Self) W.Error!void {
-            try F.CUS.param(self.inner, "", .{});
+        pub fn save(self: Self) Error!void {
+            try F.CUS.param(self.w, "", .{});
         }
-        pub fn restore(self: Self) W.Error!void {
-            try F.CUR.param(self.inner, "", .{});
+        pub fn restore(self: Self) Error!void {
+            try F.CUR.param(self.w, "", .{});
         }
 
-        pub fn row(self: Self, n: i32) W.Error!void {
+        pub fn row(self: Self, n: i32) Error!void {
             if (n == 0) return;
             if (n > 0) {
                 try self.down(@intCast(n));
@@ -58,7 +60,7 @@ pub fn CursorWriter(W: type) type {
                 try self.up(@intCast(-n));
             }
         }
-        pub fn column(self: Self, n: i32) W.Error!void {
+        pub fn column(self: Self, n: i32) Error!void {
             if (n == 0) return;
             if (n > 0) {
                 try self.right(@intCast(n));
@@ -66,29 +68,30 @@ pub fn CursorWriter(W: type) type {
                 try self.left(@intCast(-n));
             }
         }
-        pub fn move(self: Self, _row: i32, _column: i32) W.Error!void {
+        pub fn move(self: Self, _row: i32, _column: i32) Error!void {
             try self.row(_row);
             try self.column(_column);
         }
     };
 }
 
-pub fn PosiWriter(CW: type) type {
-    const W = @FieldType(CW, "inner");
+pub fn PosiPrinter(CW: type) type {
+    comptime assert(@hasDecl(CW, "print"));
+    const W = @FieldType(CW, "w");
     return struct {
         const Self = @This();
-        writer: CW,
+        w: CW,
 
         pub fn new(writer: CW) Self {
-            return .{ .writer = writer };
+            return .{ .w = writer };
         }
-        pub fn printRel(self: Self, row: i32, column: i32, comptime fmt: []const u8, args: anytype) W.Error!void {
-            try CursorWriter(W).new(self.writer.inner).move(row, column);
-            try self.writer.print(fmt, args);
+        pub fn to(self: Self, row: i32, column: i32, comptime fmt: []const u8, args: anytype) !void {
+            try CursorWriter(W).new(self.w.w).move(row, column);
+            try self.w.print(fmt, args);
         }
-        pub fn printAbs(self: Self, row: u32, column: u32, comptime fmt: []const u8, args: anytype) W.Error!void {
-            try CursorWriter(W).new(self.writer.inner).moveAt(row, column);
-            try self.writer.print(fmt, args);
+        pub fn at(self: Self, row: u32, column: u32, comptime fmt: []const u8, args: anytype) !void {
+            try CursorWriter(W).new(self.w.w).moveAt(row, column);
+            try self.w.print(fmt, args);
         }
     };
 }

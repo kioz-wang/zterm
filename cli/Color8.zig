@@ -1,8 +1,7 @@
 const std = @import("std");
 
-const zterm = @import("zterm");
-const terminal = zterm.stdout();
-const Attribute = zterm.Attribute;
+const terminal = @import("Term").getStd();
+const Attribute = @import("attr").Attribute;
 
 const zargs = @import("zargs");
 const Command = zargs.Command;
@@ -41,10 +40,10 @@ fn unit(self: Self, y: u32, x: u32, attr: Attribute) !void {
     }
     const row: u32 = self.tbl_orow + y * self.unit_height;
     const col: u32 = self.tbl_ocol + x * self.unit_width;
-    try terminal.attributor(attr).positioner()
-        .printAbs(row, col, Self.UNIT_FMT, .{self.msg});
-    try terminal.attributor(attr.bold()).positioner()
-        .printAbs(row + 1, col, Self.UNIT_FMT, .{self.msg});
+    try terminal.attributor(attr).posiPrint()
+        .at(row, col, Self.UNIT_FMT, .{self.msg});
+    try terminal.attributor(attr.bold()).posiPrint()
+        .at(row + 1, col, Self.UNIT_FMT, .{self.msg});
 }
 fn gYm(self: Self) !void {
     const cursor = terminal.cursor();
@@ -72,7 +71,7 @@ fn gYm(self: Self) !void {
 
     var col: u32 = 1;
     while (col <= 8) : (col += 1) {
-        try terminal.positioner().printAbs(
+        try terminal.posiPrint().at(
             self.origin_row,
             self.tbl_ocol + col * self.unit_width,
             " 4{d}m ",
@@ -91,14 +90,14 @@ fn gYm(self: Self) !void {
         const _row: u32 = self.tbl_orow + row * self.unit_height;
         const _col: u32 = self.origin_col;
         ptr = try std.fmt.bufPrint(&buffer, "{}", .{attr});
-        try terminal.positioner().printAbs(
+        try terminal.posiPrint().at(
             _row,
             _col,
             "{s:5} ",
             .{if (std.mem.startsWith(u8, ptr, "\x1b[")) ptr[2..] else ptr},
         );
         ptr = try std.fmt.bufPrint(&buffer, "{}", .{attr.bold()});
-        try terminal.positioner().printAbs(
+        try terminal.posiPrint().at(
             _row + 1,
             _col,
             "{s:5} ",
@@ -118,10 +117,7 @@ fn cb(args: *_cmd.Result()) void {
     var color_test = Self.new(args.msg, 2, 2);
     color_test.line_delay_ms = args.line_delay_ms;
     color_test.unit_delay_ms = args.unit_delay_ms;
-    color_test.gYm() catch |e| {
-        std.log.err("{}", .{e});
-        std.process.exit(1);
-    };
+    color_test.gYm() catch |e| zargs.exit(e, 1);
 }
 
 pub const cmd = Self._cmd.callBack(Self.cb);

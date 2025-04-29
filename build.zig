@@ -23,6 +23,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     mod_cursor.addImport("mapping", mod_mapping);
+    mod_cursor.addImport("helper", mod_helper);
 
     const mod_attr = b.addModule("attr", .{
         .root_source_file = b.path("src/attr.zig"),
@@ -33,8 +34,8 @@ pub fn build(b: *std.Build) void {
     mod_attr.addImport("mapping", mod_mapping);
     mod_attr.addImport("cursor", mod_cursor);
 
-    const mod_term = b.addModule("zterm", .{
-        .root_source_file = b.path("src/root.zig"),
+    const mod_term = b.addModule("Term", .{
+        .root_source_file = b.path("src/Terminal.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -69,13 +70,15 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    exe_mod.addImport("zterm", mod_term);
+    exe_mod.addImport("Term", mod_term);
+    exe_mod.addImport("attr", mod_attr);
     exe_mod.addImport("zargs", b.dependency("zargs", .{}).module("zargs"));
 
     const exe = b.addExecutable(.{
         .name = "zterm_cli",
         .root_module = exe_mod,
     });
+    exe.linkLibC();
     b.installArtifact(exe);
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
