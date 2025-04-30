@@ -44,13 +44,13 @@ pub fn build(b: *std.Build) void {
     mod_term.addImport("cursor", mod_cursor);
 
     const test_step = b.step("test", "Run unit tests");
-    const files_contain_ut = [_]*std.Build.Module{ mod_attr, mod_mapping };
-    for (files_contain_ut) |file_ut| {
-        const run_ut = b.addRunArtifact(
-            b.addTest(.{ .root_module = file_ut }),
+    const mods_utest = [_]*std.Build.Module{ mod_helper, mod_attr, mod_mapping, mod_cursor };
+    for (mods_utest) |unit| {
+        const utest = b.addRunArtifact(
+            b.addTest(.{ .root_module = unit }),
         );
-        run_ut.skip_foreign_checks = true;
-        test_step.dependOn(&run_ut.step);
+        utest.skip_foreign_checks = true;
+        test_step.dependOn(&utest.step);
     }
 
     const doc = b.addObject(.{

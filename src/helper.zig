@@ -6,13 +6,12 @@ pub const alias = struct {
     pub const print = std.fmt.comptimePrint;
     pub const sprint = std.fmt.bufPrint;
     pub const FormatOptions = std.fmt.FormatOptions;
-    pub const assert = std.debug.assert;
 };
 
 const String = alias.String;
-const assert = alias.assert;
 
 pub const formatter = struct {
+    const assert = std.debug.assert;
     pub fn any(v: anytype, writer: anytype) @TypeOf(writer).Error!void {
         return std.fmt.formatType(v, "any", .{}, writer, std.fmt.default_max_depth);
     }
