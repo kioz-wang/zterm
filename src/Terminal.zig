@@ -2,8 +2,8 @@ const std = @import("std");
 const par = @import("mapping").par;
 const ctl = @import("mapping").ctl;
 const F = @import("mapping").F;
-const _attr = @import("attr");
-const _cursor = @import("cursor");
+pub const attr = @import("attr");
+pub const cursor = @import("cursor");
 const castU = @import("helper").castU;
 const castI = @import("helper").castI;
 
@@ -33,13 +33,13 @@ pub fn getStd() Self {
 pub fn print(self: Self, comptime fmt: []const u8, args: anytype) Error!void {
     try self.w.print(fmt, args);
 }
-pub fn posiPrint(self: Self) _cursor.PosiPrinter(Self) {
+pub fn posiPrint(self: Self) cursor.PosiPrinter(Self) {
     return .new(self);
 }
-pub fn attror(self: Self, attr: _attr.Attribute) _attr.AttrWriter(W) {
-    return .new(attr, self.w);
+pub fn getAttror(self: Self, attribute: attr.Attribute) attr.AttrWriter(W) {
+    return .new(attribute, self.w);
 }
-pub fn cursor(self: Self) _cursor.CursorWriter(W) {
+pub fn getCursor(self: Self) cursor.CursorWriter(W) {
     return .new(self.w);
 }
 
@@ -84,7 +84,7 @@ pub fn mode(self: Self, m: par.SM, set: bool) Error!void {
 }
 
 /// TODO: When open another `tty`, sometimes report without prefixed `0x1b`, why?
-pub fn reportCursor(self: Self) !_cursor.Vec2 {
+pub fn reportCursor(self: Self) !cursor.Vec2 {
     var buffer: [32]u8 = undefined;
     var slice: []const u8 = undefined;
 

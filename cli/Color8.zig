@@ -1,8 +1,9 @@
 const std = @import("std");
 
-const term = @import("Term").getStd();
-const Attribute = @import("attr").Attribute;
-const castVec2 = @import("cursor").castVec2;
+const Term = @import("Term");
+const term = Term.getStd();
+const Attribute = Term.attr.Attribute;
+const castVec2 = Term.cursor.castVec2;
 
 const zargs = @import("zargs");
 const Command = zargs.Command;
@@ -41,13 +42,13 @@ fn unit(self: Self, y: u32, x: u32, attr: Attribute) !void {
     }
     const row = self.tbl_orow + y * self.unit_height;
     const col = self.tbl_ocol + x * self.unit_width;
-    try term.attror(attr).posiPrint()
+    try term.getAttror(attr).posiPrint()
         .at(castVec2(col, row), Self.UNIT_FMT, .{self.msg});
-    try term.attror(attr.bold()).posiPrint()
+    try term.getAttror(attr.bold()).posiPrint()
         .at(castVec2(col, row + 1), Self.UNIT_FMT, .{self.msg});
 }
 fn gYm(self: Self) !void {
-    const cursor = term.cursor();
+    const cursor = term.getCursor();
 
     try term.eraseDisplay(.whole);
 
@@ -68,7 +69,7 @@ fn gYm(self: Self) !void {
             std.time.sleep(std.time.ns_per_ms * ms);
         }
     }
-    try term.attror(.reset).print("", .{});
+    try term.getAttror(.reset).print("", .{});
 
     var col: u32 = 1;
     while (col <= 8) : (col += 1) {

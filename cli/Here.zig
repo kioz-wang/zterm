@@ -1,7 +1,6 @@
 const std = @import("std");
 
 const Term = @import("Term");
-const Attribute = @import("attr").Attribute;
 
 const zargs = @import("zargs");
 const Command = zargs.Command;
