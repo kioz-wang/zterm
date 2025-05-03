@@ -64,3 +64,13 @@ pub const env = struct {
         };
     }
 };
+
+pub fn cast(T: type, n: anytype) T {
+    return @intCast(n);
+}
+pub fn castU(u: anytype) u32 {
+    return cast(u32, u);
+}
+pub fn castI(i: anytype) i32 {
+    return cast(i32, i);
+}

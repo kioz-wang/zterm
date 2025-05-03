@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const terminal = @import("Term").getStd();
+const Term = @import("Term");
 const Attribute = @import("attr").Attribute;
 
 const zargs = @import("zargs");
@@ -9,10 +9,17 @@ const Arg = zargs.Arg;
 
 const Self = @This();
 
-const _cmd = Command.new("here").about("Test for report");
-fn cb(_: *_cmd.Result()) void {
-    const posi = terminal.report() catch |e| zargs.exit(e, 1);
-    std.debug.print("{any}\n", .{posi});
+const _cmd = Command.new("here").about("Test for report")
+    .arg(Arg.optArg("tty", []const u8).long("tty"));
+fn cb(args: *_cmd.Result()) void {
+    const term = Term.new(
+        std.fs.openFileAbsolute(
+            args.tty,
+            .{ .mode = .read_write },
+        ) catch |e| zargs.exit(e, 1),
+    );
+    const posi = term.reportCursor() catch |e| zargs.exit(e, 1);
+    std.debug.print("{}\n", .{posi});
 }
 
 pub const cmd = Self._cmd.callBack(Self.cb);

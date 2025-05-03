@@ -1,50 +1,105 @@
+const std = @import("std");
 const F = @import("mapping").F;
-const assert = @import("helper").alias.assert;
+const castU = @import("helper").castU;
+const castI = @import("helper").castI;
+const assert = std.debug.assert;
 
-pub fn apply(w: anytype) CursorWriter(@TypeOf(w)) {
-    return .new(w);
+pub const Vec2 = @Vector(2, i32);
+
+pub fn castVec2(x: anytype, y: anytype) Vec2 {
+    return .{ @intCast(x), @intCast(y) };
 }
+
+const _test = struct {
+    const t = std.testing;
+    test "Cast" {
+        try t.expectEqual(Vec2{ 1, -2 }, castVec2(@as(u16, 1), @as(i64, -2)));
+    }
+};
+
+pub const Region = union(enum) {
+    quad1,
+    quad2,
+    quad3,
+    quad4,
+    axisX: bool,
+    axisY: bool,
+    origin,
+
+    pub fn get(point: Vec2) Region {
+        const x, const y = point;
+        return if (x > 0 and y == 0) .{ .axisX = true } else if (x > 0 and y > 0) .quad1 else if (x == 0 and y > 0) .{ .axisY = true } else if (x < 0 and y > 0) .quad2 else if (x < 0 and y == 0) .{ .axisX = false } else if (x < 0 and y < 0) .quad3 else if (x == 0 and y < 0) .{ .axisY = false } else if (x > 0 and y < 0) .quad4 else .origin;
+    }
+
+    const _test = struct {
+        const t = std.testing;
+        test "Region check" {
+            try t.expect(get(.{ 1, 0 }).axisX);
+            try t.expect(get(.{ 1, 1 }) == .quad1);
+            try t.expect(get(.{ 0, 1 }).axisY);
+            try t.expect(get(.{ -1, 1 }) == .quad2);
+            try t.expect(!get(.{ -1, 0 }).axisX);
+            try t.expect(get(.{ -1, -1 }) == .quad3);
+            try t.expect(!get(.{ 0, -1 }).axisY);
+            try t.expect(get(.{ 1, -1 }) == .quad4);
+        }
+    };
+};
 
 pub fn CursorWriter(W: type) type {
     return struct {
-        const Self = @This();
-        const Error = W.Error;
         w: W,
+
+        const Self = @This();
+        pub const Error = W.Error;
 
         pub fn new(writer: W) Self {
             return .{ .w = writer };
         }
-        pub fn up(self: Self, n: u32) Error!void {
-            try F.CUU.param(self.w, "{d}", .{n});
+
+        pub fn up(self: Self, u: anytype) Error!void {
+            if (u == 0) return;
+            try F.CUU.param(self.w, "{d}", .{castU(u)});
         }
-        pub fn down(self: Self, n: u32) Error!void {
+        pub fn down(self: Self, u: anytype) Error!void {
             // same as `F.VPR`
-            try F.CUD.param(self.w, "{d}", .{n});
+            if (u == 0) return;
+            try F.CUD.param(self.w, "{d}", .{castU(u)});
         }
-        pub fn right(self: Self, n: u32) Error!void {
+        pub fn right(self: Self, u: anytype) Error!void {
             // same as `F.HPR`
-            try F.CUF.param(self.w, "{d}", .{n});
+            if (u == 0) return;
+            try F.CUF.param(self.w, "{d}", .{castU(u)});
         }
-        pub fn left(self: Self, n: u32) Error!void {
-            try F.CUB.param(self.w, "{d}", .{n});
+        pub fn left(self: Self, u: anytype) Error!void {
+            if (u == 0) return;
+            try F.CUB.param(self.w, "{d}", .{castU(u)});
         }
-        pub fn upBegin(self: Self, n: u32) Error!void {
-            try F.CPL.param(self.w, "{d}", .{n});
+
+        /// when u == 0?, columnAt(0)
+        pub fn upBegin(self: Self, u: anytype) Error!void {
+            try F.CPL.param(self.w, "{d}", .{castU(u)});
         }
-        pub fn downBegin(self: Self, n: u32) Error!void {
-            try F.CNL.param(self.w, "{d}", .{n});
+        pub fn downBegin(self: Self, u: anytype) Error!void {
+            try F.CNL.param(self.w, "{d}", .{castU(u)});
         }
-        pub fn columnAt(self: Self, n: u32) Error!void {
+
+        pub fn columnAt(self: Self, u: anytype) Error!void {
             // same as `F.HPA`
-            try F.CHA.param(self.w, "{d}", .{n});
+            try F.CHA.param(self.w, "{d}", .{castU(u) + 1});
         }
-        pub fn rowAt(self: Self, n: u32) Error!void {
-            try F.VPA.param(self.w, "{d}", .{n});
+        pub fn rowAt(self: Self, u: anytype) Error!void {
+            try F.VPA.param(self.w, "{d}", .{castU(u) + 1});
         }
-        pub fn moveAt(self: Self, _row: u32, _column: u32) Error!void {
+        pub fn moveAt(self: Self, point: Vec2) Error!void {
             // same as `F.HVP`
-            try F.CUP.param(self.w, "{d}{c}{d}", .{ _row, @import("mapping").par.sep, _column });
+            try F.CUP.param(self.w, "{d}{c}{d}", .{
+                castU(point[1]) + 1,
+                @import("mapping").par.sep,
+                castU(point[0]) + 1,
+            });
         }
+
         pub fn save(self: Self) Error!void {
             try F.CUS.param(self.w, "", .{});
         }
@@ -52,46 +107,59 @@ pub fn CursorWriter(W: type) type {
             try F.CUR.param(self.w, "", .{});
         }
 
-        pub fn row(self: Self, n: i32) Error!void {
-            if (n == 0) return;
-            if (n > 0) {
-                try self.down(@intCast(n));
+        pub fn row(self: Self, _i: anytype) Error!void {
+            const i = castI(_i);
+            if (i == 0) return;
+            if (i > 0) {
+                try self.down(i);
             } else {
-                try self.up(@intCast(-n));
+                try self.up(-i);
             }
         }
-        pub fn column(self: Self, n: i32) Error!void {
-            if (n == 0) return;
-            if (n > 0) {
-                try self.right(@intCast(n));
+        pub fn column(self: Self, _i: anytype) Error!void {
+            const i = castI(_i);
+            if (i == 0) return;
+            if (i > 0) {
+                try self.right(i);
             } else {
-                try self.left(@intCast(-n));
+                try self.left(-i);
             }
         }
-        pub fn move(self: Self, _row: i32, _column: i32) Error!void {
-            try self.row(_row);
-            try self.column(_column);
+        pub fn move(self: Self, vector: Vec2) Error!void {
+            try self.row(vector[1]);
+            try self.column(vector[0]);
         }
     };
 }
+pub fn cursorWriter(w: anytype) CursorWriter(@TypeOf(w)) {
+    return .new(w);
+}
 
-pub fn PosiPrinter(CW: type) type {
-    comptime assert(@hasDecl(CW, "print"));
-    const W = @FieldType(CW, "w");
+pub fn PosiPrinter(W: type) type {
+    comptime assert(@hasDecl(W, "print"));
+    comptime assert(@hasField(W, "w"));
     return struct {
+        w: W,
         const Self = @This();
-        w: CW,
 
-        pub fn new(writer: CW) Self {
+        pub fn new(writer: W) Self {
             return .{ .w = writer };
         }
-        pub fn to(self: Self, row: i32, column: i32, comptime fmt: []const u8, args: anytype) !void {
-            try CursorWriter(W).new(self.w.w).move(row, column);
+        pub fn to(self: Self, vector: Vec2, comptime fmt: []const u8, args: anytype) !void {
+            try cursorWriter(self.w.w).move(vector);
             try self.w.print(fmt, args);
         }
-        pub fn at(self: Self, row: u32, column: u32, comptime fmt: []const u8, args: anytype) !void {
-            try CursorWriter(W).new(self.w.w).moveAt(row, column);
+        pub fn at(self: Self, point: Vec2, comptime fmt: []const u8, args: anytype) !void {
+            try cursorWriter(self.w.w).moveAt(point);
             try self.w.print(fmt, args);
         }
     };
+}
+pub fn posiPrinter(w: anytype) PosiPrinter(@TypeOf(w)) {
+    return .new(w);
+}
+
+test {
+    _ = Region._test;
+    _ = _test;
 }

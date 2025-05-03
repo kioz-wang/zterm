@@ -1,7 +1,8 @@
 const std = @import("std");
 
-const terminal = @import("Term").getStd();
+const term = @import("Term").getStd();
 const Attribute = @import("attr").Attribute;
+const castVec2 = @import("cursor").castVec2;
 
 const zargs = @import("zargs");
 const Command = zargs.Command;
@@ -38,17 +39,17 @@ fn unit(self: Self, y: u32, x: u32, attr: Attribute) !void {
     if (self.unit_delay_ms) |ms| {
         std.time.sleep(std.time.ns_per_ms * ms);
     }
-    const row: u32 = self.tbl_orow + y * self.unit_height;
-    const col: u32 = self.tbl_ocol + x * self.unit_width;
-    try terminal.attributor(attr).posiPrint()
-        .at(row, col, Self.UNIT_FMT, .{self.msg});
-    try terminal.attributor(attr.bold()).posiPrint()
-        .at(row + 1, col, Self.UNIT_FMT, .{self.msg});
+    const row = self.tbl_orow + y * self.unit_height;
+    const col = self.tbl_ocol + x * self.unit_width;
+    try term.attror(attr).posiPrint()
+        .at(castVec2(col, row), Self.UNIT_FMT, .{self.msg});
+    try term.attror(attr.bold()).posiPrint()
+        .at(castVec2(col, row + 1), Self.UNIT_FMT, .{self.msg});
 }
 fn gYm(self: Self) !void {
-    const cursor = terminal.cursor();
+    const cursor = term.cursor();
 
-    try terminal.eraseDisplay(.whole);
+    try term.eraseDisplay(.whole);
 
     var row: u32 = 0;
     while (row <= 8) : (row += 1) {
@@ -67,13 +68,12 @@ fn gYm(self: Self) !void {
             std.time.sleep(std.time.ns_per_ms * ms);
         }
     }
-    try terminal.attributor(.reset).print("", .{});
+    try term.attror(.reset).print("", .{});
 
     var col: u32 = 1;
     while (col <= 8) : (col += 1) {
-        try terminal.posiPrint().at(
-            self.origin_row,
-            self.tbl_ocol + col * self.unit_width,
+        try term.posiPrint().at(
+            castVec2(self.tbl_ocol + col * self.unit_width, self.origin_row),
             " 4{d}m ",
             .{col - 1},
         );
@@ -90,16 +90,14 @@ fn gYm(self: Self) !void {
         const _row: u32 = self.tbl_orow + row * self.unit_height;
         const _col: u32 = self.origin_col;
         ptr = try std.fmt.bufPrint(&buffer, "{}", .{attr});
-        try terminal.posiPrint().at(
-            _row,
-            _col,
+        try term.posiPrint().at(
+            castVec2(_col, _row),
             "{s:5} ",
             .{if (std.mem.startsWith(u8, ptr, "\x1b[")) ptr[2..] else ptr},
         );
         ptr = try std.fmt.bufPrint(&buffer, "{}", .{attr.bold()});
-        try terminal.posiPrint().at(
-            _row + 1,
-            _col,
+        try term.posiPrint().at(
+            castVec2(_col, _row + 1),
             "{s:5} ",
             .{if (std.mem.startsWith(u8, ptr, "\x1b[")) ptr[2..] else ptr},
         );

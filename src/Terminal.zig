@@ -1,10 +1,11 @@
 const std = @import("std");
 const par = @import("mapping").par;
+const ctl = @import("mapping").ctl;
 const F = @import("mapping").F;
-const Attribute = @import("attr").Attribute;
-const AttrWriter = @import("attr").AttrWriter;
-const CursorWriter = @import("cursor").CursorWriter;
-const PosiPrinter = @import("cursor").PosiPrinter;
+const _attr = @import("attr");
+const _cursor = @import("cursor");
+const castU = @import("helper").castU;
+const castI = @import("helper").castI;
 
 const TermError = error{
     InvalidReport,
@@ -29,55 +30,33 @@ pub fn getStd() Self {
     };
 }
 
-pub fn attributor(self: Self, attr: Attribute) AttrWriter(W) {
-    return .new(attr, self.w);
-}
-pub fn cursor(self: Self) CursorWriter(W) {
-    return .new(self.w);
-}
-
 pub fn print(self: Self, comptime fmt: []const u8, args: anytype) Error!void {
     try self.w.print(fmt, args);
 }
-pub fn posiPrint(self: Self) PosiPrinter(Self) {
+pub fn posiPrint(self: Self) _cursor.PosiPrinter(Self) {
     return .new(self);
 }
-pub fn report(self: Self) !struct { u32, u32 } {
-    var buffer: [32]u8 = undefined;
-    var slice: []const u8 = undefined;
-
-    const original = try std.posix.tcgetattr(self.r.context.handle);
-    var raw = original;
-    raw.lflag.ECHO = false;
-    raw.lflag.ICANON = false;
-    try std.posix.tcsetattr(self.r.context.handle, .NOW, raw);
-
-    try F.DSR.param(self.w, "{d}", .{@intFromEnum(par.DSR.CPR)});
-    slice = std.mem.trimRight(u8, buffer[0..(try self.r.read(&buffer))], "\n");
-
-    try std.posix.tcsetattr(self.r.context.handle, .NOW, original);
-
-    if (std.mem.startsWith(u8, slice, "\x1b[") and slice[slice.len - 1] == 'R') {
-        const s = slice[0 .. slice.len - 1][2..];
-        var i = std.mem.splitAny(u8, s, ";");
-        const row: u32 = try std.fmt.parseInt(u32, i.next().?, 10);
-        const col: u32 = try std.fmt.parseInt(u32, i.next().?, 10);
-        return .{ row, col };
-    }
-    return Error.InvalidReport;
+pub fn attror(self: Self, attr: _attr.Attribute) _attr.AttrWriter(W) {
+    return .new(attr, self.w);
+}
+pub fn cursor(self: Self) _cursor.CursorWriter(W) {
+    return .new(self.w);
 }
 
-pub fn insertBlank(self: Self, n: u32) Error!void {
-    try F.ICH.param(self.w, "{d}", .{n});
+pub fn insertBlank(self: Self, u: anytype) Error!void {
+    if (u == 0) return;
+    try F.ICH.param(self.w, "{d}", .{castU(u)});
 }
-pub fn insertLine(self: Self, n: u32) Error!void {
-    try F.IL.param(self.w, "{d}", .{n});
+pub fn insertLine(self: Self, u: anytype) Error!void {
+    if (u == 0) return;
+    try F.IL.param(self.w, "{d}", .{castU(u)});
 }
-pub fn deleteLine(self: Self, n: u32) Error!void {
-    try F.DL.param(self.w, "{d}", .{n});
+pub fn deleteLine(self: Self, u: anytype) Error!void {
+    if (u == 0) return;
+    try F.DL.param(self.w, "{d}", .{castU(u)});
 }
-pub fn deleteColumnAt(self: Self, n: u32) Error!void {
-    try F.DCH.param(self.w, "{d}", .{n});
+pub fn deleteColumnAt(self: Self, u: anytype) Error!void {
+    try F.DCH.param(self.w, "{d}", .{castU(u) + 1});
 }
 pub fn eraseLine(self: Self, _el: ?par.EL) Error!void {
     if (_el) |el| {
@@ -93,8 +72,8 @@ pub fn eraseDisplay(self: Self, _ed: ?par.ED) Error!void {
         try F.ED.param(self.w, "", .{});
     }
 }
-pub fn eraseColumnAt(self: Self, n: u32) Error!void {
-    try F.ECH.param(self.w, "{d}", .{n});
+pub fn eraseColumnAt(self: Self, u: anytype) Error!void {
+    try F.ECH.param(self.w, "{d}", .{castU(u) + 1});
 }
 pub fn keyboardLED(self: Self, led: par.DECLL) Error!void {
     try F.DECLL.param(self.w, "{d}", .{@intFromEnum(led)});
@@ -102,4 +81,31 @@ pub fn keyboardLED(self: Self, led: par.DECLL) Error!void {
 pub fn mode(self: Self, m: par.SM, set: bool) Error!void {
     const f = if (set) F.SM else F.RM;
     try f.param(self.w, "{d}", .{@intFromEnum(m)});
+}
+
+/// TODO: When open another `tty`, sometimes report without prefixed `0x1b`, why?
+pub fn reportCursor(self: Self) !_cursor.Vec2 {
+    var buffer: [32]u8 = undefined;
+    var slice: []const u8 = undefined;
+
+    const old = try std.posix.tcgetattr(self.r.context.handle);
+    var raw = old;
+    raw.lflag.ECHO = false;
+    raw.lflag.ICANON = false;
+    try std.posix.tcsetattr(self.r.context.handle, .NOW, raw);
+    defer std.posix.tcsetattr(self.r.context.handle, .NOW, old) catch unreachable;
+
+    try F.DSR.param(self.w, "{d}", .{@intFromEnum(par.DSR.CPR)});
+    slice = std.mem.trimRight(u8, buffer[0..(try self.r.read(&buffer))], "\n");
+
+    const prefix = std.fmt.comptimePrint("{}", .{ctl.ESCSequence.CSI});
+    if (std.mem.startsWith(u8, slice, prefix) and slice[slice.len - 1] == 'R') {
+        const s = slice[0 .. slice.len - 1][prefix.len..];
+        var i = std.mem.splitAny(u8, s, ";");
+        const row = try std.fmt.parseInt(i32, i.next().?, 10);
+        const col = try std.fmt.parseInt(i32, i.next().?, 10);
+        return .{ col - 1, row - 1 };
+    }
+    return Error.InvalidReport;
+    // std.debug.panic("invalid report: {d}:_{s}_", .{ slice.len, slice });
 }

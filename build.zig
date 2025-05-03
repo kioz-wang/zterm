@@ -17,7 +17,7 @@ pub fn build(b: *std.Build) void {
     });
     mod_mapping.addImport("helper", mod_helper);
 
-    const mod_cursor = b.createModule(.{
+    const mod_cursor = b.addModule("cursor", .{
         .root_source_file = b.path("src/cursor.zig"),
         .target = target,
         .optimize = optimize,
@@ -42,6 +42,7 @@ pub fn build(b: *std.Build) void {
     mod_term.addImport("mapping", mod_mapping);
     mod_term.addImport("attr", mod_attr);
     mod_term.addImport("cursor", mod_cursor);
+    mod_term.addImport("helper", mod_helper);
 
     const test_step = b.step("test", "Run unit tests");
     const mods_utest = [_]*std.Build.Module{ mod_helper, mod_attr, mod_mapping, mod_cursor };
@@ -72,6 +73,7 @@ pub fn build(b: *std.Build) void {
     });
     exe_mod.addImport("Term", mod_term);
     exe_mod.addImport("attr", mod_attr);
+    exe_mod.addImport("cursor", mod_cursor);
     exe_mod.addImport("zargs", b.dependency("zargs", .{}).module("zargs"));
 
     const exe = b.addExecutable(.{
