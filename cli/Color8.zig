@@ -4,6 +4,8 @@ const Term = @import("Term");
 const term = Term.getStd();
 const Attribute = Term.attr.Attribute;
 const castVec2 = Term.cursor.castVec2;
+const scaleVec2 = Term.cursor.scaleVec2;
+const Vec2 = Term.cursor.Vec2;
 
 const zargs = @import("zargs");
 const Command = zargs.Command;
@@ -12,58 +14,51 @@ const Arg = zargs.Arg;
 const Self = @This();
 
 const UNIT_FMT = " {s} ";
+const HEADER = Vec2{ 6, 1 };
 
 msg: []const u8,
 unit_delay_ms: ?u64 = null,
 line_delay_ms: ?u64 = null,
-unit_width: u32,
-unit_height: u32 = 2,
-origin_row: u32 = 1,
-origin_col: u32 = 1,
-tbl_orow: u32 = undefined,
-tbl_ocol: u32 = undefined,
-hd_col_width: u32 = 6,
-hd_row_height: u32 = 1,
+unit_sz: Vec2,
+origin: Vec2,
+tbl_origin: Vec2 = undefined,
 
-fn new(msg: []const u8, row: u32, col: u32) Self {
-    const width: u32 = @as(u32, @intCast(msg.len)) + 4;
+fn new(msg: []const u8, _origin: Vec2) Self {
     var self: Self = .{
         .msg = msg,
-        .unit_width = width,
-        .origin_row = row,
-        .origin_col = col,
+        .unit_sz = castVec2(msg.len + 4, 2),
+        .origin = _origin,
     };
-    self.tbl_orow, self.tbl_ocol = .{ row + self.hd_row_height, col + self.hd_col_width };
+    self.tbl_origin = self.origin + Self.HEADER;
     return self;
 }
-fn unit(self: Self, y: u32, x: u32, attr: Attribute) !void {
+fn unit(self: Self, p: Vec2, attr: Attribute) !void {
     if (self.unit_delay_ms) |ms| {
         std.time.sleep(std.time.ns_per_ms * ms);
     }
-    const row = self.tbl_orow + y * self.unit_height;
-    const col = self.tbl_ocol + x * self.unit_width;
+    const point = self.tbl_origin + (scaleVec2(p, self.unit_sz) orelse unreachable);
     try term.getAttror(attr).posiPrint()
-        .at(castVec2(col, row), Self.UNIT_FMT, .{self.msg});
+        .at(point, Self.UNIT_FMT, .{self.msg});
     try term.getAttror(attr.bold()).posiPrint()
-        .at(castVec2(col, row + 1), Self.UNIT_FMT, .{self.msg});
+        .at(point + Vec2{ 0, 1 }, Self.UNIT_FMT, .{self.msg});
 }
 fn gYm(self: Self) !void {
     const cursor = term.getCursor();
 
     try term.eraseDisplay(.whole);
 
-    var row: u32 = 0;
+    var row: i32 = 0;
     while (row <= 8) : (row += 1) {
         var attr = Attribute.new();
         if (row != 0) {
             attr = attr.color8(@enumFromInt(row - 1));
         }
-        var col: u32 = 0;
+        var col: i32 = 0;
         while (col <= 8) : (col += 1) {
             if (col != 0) {
                 attr = attr.bgColor8(@enumFromInt(col - 1));
             }
-            try self.unit(row, col, attr);
+            try self.unit(.{ col, row }, attr);
         }
         if (self.line_delay_ms) |ms| {
             std.time.sleep(std.time.ns_per_ms * ms);
@@ -71,10 +66,10 @@ fn gYm(self: Self) !void {
     }
     try term.getAttror(.reset).print("", .{});
 
-    var col: u32 = 1;
+    var col: i32 = 1;
     while (col <= 8) : (col += 1) {
         try term.posiPrint().at(
-            castVec2(self.tbl_ocol + col * self.unit_width, self.origin_row),
+            castVec2(self.tbl_origin[0] + col * self.unit_sz[0], self.origin[1]),
             " 4{d}m ",
             .{col - 1},
         );
@@ -88,32 +83,44 @@ fn gYm(self: Self) !void {
         if (row != 0) {
             attr = attr.color8(@enumFromInt(row - 1));
         }
-        const _row: u32 = self.tbl_orow + row * self.unit_height;
-        const _col: u32 = self.origin_col;
+        const point = Vec2{
+            self.origin[0],
+            self.tbl_origin[1] + row * self.unit_sz[1],
+        };
         ptr = try std.fmt.bufPrint(&buffer, "{}", .{attr});
         try term.posiPrint().at(
-            castVec2(_col, _row),
+            point,
             "{s:5} ",
             .{if (std.mem.startsWith(u8, ptr, "\x1b[")) ptr[2..] else ptr},
         );
         ptr = try std.fmt.bufPrint(&buffer, "{}", .{attr.bold()});
         try term.posiPrint().at(
-            castVec2(_col, _row + 1),
+            point + Vec2{ 1, 0 },
             "{s:5} ",
             .{if (std.mem.startsWith(u8, ptr, "\x1b[")) ptr[2..] else ptr},
         );
     }
 
-    try cursor.rowAt(self.tbl_orow + 8 * self.unit_height + 2);
+    try cursor.rowAt(self.tbl_origin[1] + 8 * self.unit_sz[1] + 2);
     try cursor.downBegin(2);
 }
 
+const WrapperVec2 = struct {
+    value: Vec2,
+    const default: WrapperVec2 = .{ .value = Term.cursor.origin };
+    pub fn parse(s: []const u8, _: ?std.mem.Allocator) ?WrapperVec2 {
+        return .{ .value = Term.cursor.parseVec2(s, null) orelse return null };
+    }
+};
+
 const _cmd = Command.new("color-test").alias("gYm").alias("gym")
+    .arg(Arg.optArg("origin", WrapperVec2).long("at")
+        .default(.default))
     .arg(Arg.posArg("msg", []const u8).default("gYm"))
     .arg(Arg.optArg("line_delay_ms", ?u64).short('D'))
     .arg(Arg.optArg("unit_delay_ms", ?u64).short('d'));
 fn cb(args: *_cmd.Result()) void {
-    var color_test = Self.new(args.msg, 2, 2);
+    var color_test = Self.new(args.msg, args.origin.value);
     color_test.line_delay_ms = args.line_delay_ms;
     color_test.unit_delay_ms = args.unit_delay_ms;
     color_test.gYm() catch |e| zargs.exit(e, 1);

@@ -5,15 +5,41 @@ const castI = @import("helper").castI;
 const assert = std.debug.assert;
 
 pub const Vec2 = @Vector(2, i32);
+pub const origin: Vec2 = .{ 0, 0 };
 
 pub fn castVec2(x: anytype, y: anytype) Vec2 {
     return .{ @intCast(x), @intCast(y) };
+}
+/// `( 1,0)`, `{2,-2}`, `( 2 ; -6)`, `(2: 3)`
+pub fn parseVec2(s: []const u8, _: ?std.mem.Allocator) ?Vec2 {
+    const ss = std.mem.trim(u8, s, "(){} ");
+    var i = std.mem.splitAny(u8, ss, ";,:");
+    const sx = i.next() orelse return null;
+    const x = std.fmt.parseInt(i32, std.mem.trim(u8, sx, " "), 0) catch return null;
+    const sy = i.next() orelse return null;
+    const y = std.fmt.parseInt(i32, std.mem.trim(u8, sy, " "), 0) catch return null;
+    if (i.next() != null) return null;
+    return .{ x, y };
+}
+pub fn scaleVec2(raw: Vec2, scale: Vec2) ?Vec2 {
+    const x = @mulWithOverflow(raw[0], scale[0]);
+    if (x[1] != 0) return null;
+    const y = @mulWithOverflow(raw[1], scale[1]);
+    if (x[1] != 0) return null;
+    return .{ x[0], y[0] };
 }
 
 const _test = struct {
     const t = std.testing;
     test "Cast" {
         try t.expectEqual(Vec2{ 1, -2 }, castVec2(@as(u16, 1), @as(i64, -2)));
+    }
+    test "Parse" {
+        try t.expectEqual(Vec2{ 10, -2 }, parseVec2("(10,-2)", null));
+        try t.expectEqual(Vec2{ 10, -2 }, parseVec2("{10,-2}", null));
+        try t.expectEqual(Vec2{ 10, -2 }, parseVec2("(10 , -2)", null));
+        try t.expectEqual(Vec2{ 10, -2 }, parseVec2("( 10 ;-2)", null));
+        try t.expectEqual(Vec2{ 10, -2 }, parseVec2("( 0xa : -2  )", null));
     }
 };
 
@@ -62,13 +88,13 @@ pub fn CursorWriter(W: type) type {
             try F.CUU.param(self.w, "{d}", .{castU(u)});
         }
         pub fn down(self: Self, u: anytype) Error!void {
-            // same as `F.VPR`
             if (u == 0) return;
+            // same as `F.VPR`
             try F.CUD.param(self.w, "{d}", .{castU(u)});
         }
         pub fn right(self: Self, u: anytype) Error!void {
-            // same as `F.HPR`
             if (u == 0) return;
+            // same as `F.HPR`
             try F.CUF.param(self.w, "{d}", .{castU(u)});
         }
         pub fn left(self: Self, u: anytype) Error!void {
@@ -92,6 +118,7 @@ pub fn CursorWriter(W: type) type {
             try F.VPA.param(self.w, "{d}", .{castU(u) + 1});
         }
         pub fn moveAt(self: Self, point: Vec2) Error!void {
+            assert(Region.get(point + Vec2{ 1, 1 }) == .quad1);
             // same as `F.HVP`
             try F.CUP.param(self.w, "{d}{c}{d}", .{
                 castU(point[1]) + 1,
