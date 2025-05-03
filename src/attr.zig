@@ -252,28 +252,28 @@ pub const Attribute = struct {
         return self.field_set(@src().fn_name, v.bg());
     }
 
-    pub fn rawFormat(self: Self, comptime _: []const u8, _: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
-        try formatAny(ctl.ESCSequence.CSI, writer);
+    pub fn rawFormat(self: Self, comptime _: []const u8, _: FormatOptions, w: anytype) @TypeOf(w).Error!void {
+        try formatAny(ctl.ESCSequence.CSI, w);
         var first = true;
         if (!self._trust) {
-            try formatInt(SGR.reset, writer);
+            try formatInt(SGR.reset, w);
             first = false;
         }
         inline for (std.meta.fields(Storage)) |field| {
             if (@field(self.storage, field.name)) |v| {
                 if (!first) {
-                    try writer.writeByte(sep);
+                    try w.writeByte(sep);
                 }
-                try formatAny(v, writer);
+                try formatAny(v, w);
                 first = false;
             }
         }
-        try formatAny(ctl.CSISequenceFunction.SGR, writer);
+        try formatAny(ctl.CSISequenceFunction.SGR, w);
     }
     pub fn raw(self: Self) formatter.Raw(Self) {
         return formatter.raw(self);
     }
-    pub fn format(self: Self, comptime _: []const u8, _: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
+    pub fn format(self: Self, comptime _: []const u8, _: FormatOptions, w: anytype) @TypeOf(w).Error!void {
         if (self._no_color orelse Flag("NO_COLOR").check() and
             self._no_style orelse Flag("NO_STYLE").check())
             return;
@@ -285,7 +285,7 @@ pub const Attribute = struct {
         if (self._no_style orelse Flag("NO_STYLE").check()) {
             obj.storage.style = null;
         }
-        try obj.rawFormat(undefined, undefined, writer);
+        try obj.rawFormat(undefined, undefined, w);
     }
 
     fn field_style_set(self: Self, comptime name: LiteralString) Self {
@@ -453,7 +453,7 @@ pub const Attribute = struct {
     pub fn value(self: Self, v: anytype) Value(@TypeOf(v)) {
         return .new(self, v);
     }
-    pub fn apply(self: Self, w: anytype) AttrWriter(@TypeOf(w)) {
+    pub fn writer(self: Self, w: anytype) AttrWriter(@TypeOf(w)) {
         return .new(self, w);
     }
 };
@@ -530,7 +530,7 @@ const _test = struct {
     test AttrWriter {
         var buffer = std.mem.zeroes([512]u8);
         var bufferStream = std.io.fixedBufferStream(&buffer);
-        const writer = Preset.trust().no_color(false).no_style(false).apply(bufferStream.writer());
+        const writer = Preset.trust().no_color(false).no_style(false).writer(bufferStream.writer());
         try writer.print("string {s} int {d}", .{ "hello", 6 });
         try testing.expectEqualStrings(
             "\x1b[1;21;32;47mstring hello int 6",
