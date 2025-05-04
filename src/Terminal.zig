@@ -84,7 +84,7 @@ pub fn mode(self: Self, m: par.SM, set: bool) Error!void {
 }
 
 /// TODO: When open another `tty`, sometimes report without prefixed `0x1b`, why?
-pub fn reportCursor(self: Self) !cursor.Vec2 {
+pub fn cursorPosition(self: Self) !cursor.Vec2 {
     var buffer: [32]u8 = undefined;
     var slice: []const u8 = undefined;
 
@@ -108,4 +108,13 @@ pub fn reportCursor(self: Self) !cursor.Vec2 {
     }
     return Error.InvalidReport;
     // std.debug.panic("invalid report: {d}:_{s}_", .{ slice.len, slice });
+}
+
+pub fn windowSize(self: Self) !cursor.Vec2 {
+    var w: std.posix.winsize = undefined;
+    const ret = std.c.ioctl(self.r.context.handle, std.c.T.IOCGWINSZ, &w);
+    if (ret != 0) {
+        return Error.InvalidReport;
+    }
+    return .{ w.col, w.row };
 }
