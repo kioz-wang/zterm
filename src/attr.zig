@@ -163,17 +163,12 @@ pub const Color = struct {
                 if (self.background) v += SGR.Color.offset;
                 return formatInt(v, writer);
             },
-            else => {
+            inline .color256, .colorRGB => |c| {
                 var pre = SGR.Color.ColorX.pre;
                 if (self.background) pre += SGR.Color.offset;
                 try formatInt(pre, writer);
                 try writer.writeByte(sep);
-                switch (self.storage) {
-                    inline .color256, .colorRGB => |c| {
-                        return formatAny(c, writer);
-                    },
-                    else => unreachable,
-                }
+                return formatAny(c, writer);
             },
         }
     }

@@ -4,12 +4,15 @@ const castU = @import("helper").castU;
 const castI = @import("helper").castI;
 const assert = std.debug.assert;
 
+/// Point or vector in a planar coordinate
 pub const Vec2 = @Vector(2, i32);
 pub const origin: Vec2 = .{ 0, 0 };
 
+/// Construct from any int type
 pub fn castVec2(x: anytype, y: anytype) Vec2 {
     return .{ @intCast(x), @intCast(y) };
 }
+/// Scale `raw` with `scale`, return a new `Vec2`
 pub fn scaleVec2(raw: Vec2, scale: Vec2) ?Vec2 {
     const x = @mulWithOverflow(raw[0], scale[0]);
     if (x[1] != 0) return null;

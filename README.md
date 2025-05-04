@@ -8,16 +8,27 @@ A Zig implementation of [console_codes (4)](https://www.man7.org/linux/man-pages
 
 - No memory allocator needed
 - Generate attributes containing multiple styles (e.g. bold, italic) and colors (including foreground/background)
-  - Fully generatable at compile time
-  - Can be wrapped around any value needing formatting
-  - Wrappable to standard output to apply attributes to every `print` call
-- Cursor position control (absolute & relative)
-- support [`NO_COLOR`](https://no-color.org/)
-  - also, support `NO_STYLE`!
+  - Comptime constructor
+  - Wrap any value as format `args`
+  - Wray any writer then use its `print` method
+- Move cursor to/at a position
+- Get the position of current cursor
+- Support [`NO_COLOR`](https://no-color.org/) (also, support `NO_STYLE`!)
+  - Check environments at runtime when formatting the attribute
+  - Force to format raw attribute by `raw` method
+- Get window size
 
 ### Plans
 
-See [issues](https://github.com/kioz-wang/zterm/issues?q=is%3Aissue%20state%3Aopen%20label%3Aenhancement).
+> See [issues](https://github.com/kioz-wang/zterm/issues?q=is%3Aissue%20state%3Aopen%20label%3Aenhancement).
+
+- [ ] Cross-platform: windows, macos
+- [ ] Read the key, text, password and etc
+- [ ] Enhance output APIs
+
+### APIs
+
+> See https://kioz-wang.github.io/zterm/#doc
 
 ## Installation
 
@@ -54,11 +65,12 @@ const exe_mod = b.createModule(.{
     .target = target,
     .optimize = optimize,
 });
-exe_mod.addImport("zterm", b.dependency("zterm", .{}).module("zterm"));
+exe_mod.addImport("Term", b.dependency("zterm", .{}).module("Term"));
 const exe = b.addExecutable(.{
     .name = "your_app_name",
     .root_module = exe_mod,
 });
+exe.linkLibC();
 b.installArtifact(exe);
 
 const run_cmd = b.addRunArtifact(exe);
@@ -71,15 +83,11 @@ const run_step = b.step("run", "Run the app");
 run_step.dependOn(&run_cmd.step);
 ```
 
-After importing the `zterm`, you could get a terminal applied `stdout` by:
+After importing the `Term`, you could get a terminal `getStd` by:
 
 ```zig
-const zterm = @import("zterm").stdout();
+const term = @import("Term").getStd();
 ```
-
-## APIs
-
-See https://kioz-wang.github.io/zterm/#doc
 
 ## Examples
 
