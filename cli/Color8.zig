@@ -105,22 +105,13 @@ fn gYm(self: Self) !void {
     try cursor.downBegin(2);
 }
 
-const WrapperVec2 = struct {
-    value: Vec2,
-    const default: WrapperVec2 = .{ .value = Term.cursor.origin };
-    pub fn parse(s: []const u8, _: ?std.mem.Allocator) ?WrapperVec2 {
-        return .{ .value = Term.cursor.parseVec2(s, null) orelse return null };
-    }
-};
-
 const _cmd = Command.new("color-test").alias("gYm").alias("gym")
-    .arg(Arg.optArg("origin", WrapperVec2).long("at")
-        .default(.default))
+    .arg(Arg.optArg("origin", Vec2).long("at").default(Term.cursor.origin))
     .arg(Arg.posArg("msg", []const u8).default("gYm"))
     .arg(Arg.optArg("line_delay_ms", ?u64).short('D'))
     .arg(Arg.optArg("unit_delay_ms", ?u64).short('d'));
 fn cb(args: *_cmd.Result()) void {
-    var color_test = Self.new(args.msg, args.origin.value);
+    var color_test = Self.new(args.msg, args.origin);
     color_test.line_delay_ms = args.line_delay_ms;
     color_test.unit_delay_ms = args.unit_delay_ms;
     color_test.gYm() catch |e| zargs.exit(e, 1);
