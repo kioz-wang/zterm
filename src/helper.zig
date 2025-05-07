@@ -1,7 +1,6 @@
 const std = @import("std");
-const assert = std.debug.assert;
 
-pub const Alias = struct {
+pub const alias = struct {
     pub const String = []const u8;
     pub const LiteralString = [:0]const u8;
     pub const print = std.fmt.comptimePrint;
@@ -9,38 +8,39 @@ pub const Alias = struct {
     pub const FormatOptions = std.fmt.FormatOptions;
 };
 
-const String = Alias.String;
+const String = alias.String;
 
-pub const Formatter = struct {
-    pub fn anyFormat(v: anytype, writer: anytype) @TypeOf(writer).Error!void {
+pub const formatter = struct {
+    const assert = std.debug.assert;
+    pub fn any(v: anytype, writer: anytype) @TypeOf(writer).Error!void {
         return std.fmt.formatType(v, "any", .{}, writer, std.fmt.default_max_depth);
     }
-    pub fn intFormat_d(v: anytype, writer: anytype) @TypeOf(writer).Error!void {
+    pub fn dInt(v: anytype, writer: anytype) @TypeOf(writer).Error!void {
         assert(@typeInfo(@TypeOf(v)) == .int);
         return std.fmt.formatIntValue(v, "d", .{}, writer);
     }
-    pub fn enumFormat_d(v: anytype, writer: anytype) @TypeOf(writer).Error!void {
+    pub fn dEnum(v: anytype, writer: anytype) @TypeOf(writer).Error!void {
         assert(@typeInfo(@TypeOf(v)) == .@"enum");
-        return intFormat_d(@intFromEnum(v), writer);
+        return dInt(@intFromEnum(v), writer);
     }
-    pub fn enumFormat_c(v: anytype, writer: anytype) @TypeOf(writer).Error!void {
+    pub fn cEnum(v: anytype, writer: anytype) @TypeOf(writer).Error!void {
         assert(@typeInfo(@TypeOf(v)) == .@"enum");
         return std.fmt.formatIntValue(@intFromEnum(v), "c", .{}, writer);
     }
-    pub fn RawFormatter(T: type) type {
+    pub fn Raw(T: type) type {
         return struct {
             v: T,
-            pub fn format(self: @This(), comptime fmt: []const u8, options: Alias.FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
+            pub fn format(self: @This(), comptime fmt: []const u8, options: alias.FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
                 try self.v.rawFormat(fmt, options, writer);
             }
         };
     }
-    pub fn rawFormatter(v: anytype) RawFormatter(@TypeOf(v)) {
+    pub fn raw(v: anytype) Raw(@TypeOf(v)) {
         return .{ .v = v };
     }
 };
 
-pub const Env = struct {
+pub const env = struct {
     pub fn flag(key: String) bool {
         const GetEnvVarOwnedError = std.process.GetEnvVarOwnedError;
         var Allocator = std.heap.DebugAllocator(.{}).init;
@@ -64,3 +64,13 @@ pub const Env = struct {
         };
     }
 };
+
+pub fn cast(T: type, n: anytype) T {
+    return @intCast(n);
+}
+pub fn castU(u: anytype) u32 {
+    return cast(u32, u);
+}
+pub fn castI(i: anytype) i32 {
+    return cast(i32, i);
+}

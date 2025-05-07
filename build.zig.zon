@@ -6,8 +6,8 @@
 
     .dependencies = .{
         .zargs = .{
-            .url = "git+https://github.com/kioz-wang/zargs#a9491901db2668990b177d24fc55329a88bb1c84",
-            .hash = "zargs-0.14.7-tqzWbg1qAgBjLV-R5akLCGQmo39z0rbTfMyrasS9AzmX",
+            .url = "git+https://github.com/kioz-wang/zargs#ff6152d6d52e666b38862b4efa2ceccde79b2f8f",
+            .hash = "zargs-0.14.7-tqzWbpCECADLwQq4zJclQnOqA-r9JtHsx5QIgQBb0stI",
         },
     },
 

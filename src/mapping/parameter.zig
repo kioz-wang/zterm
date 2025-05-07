@@ -1,9 +1,6 @@
 const std = @import("std");
-const assert = std.debug.assert;
-const helper = @import("helper.zig");
-const print = helper.Alias.print;
-const FormatOptions = helper.Alias.FormatOptions;
-const intFormat_d = helper.Formatter.intFormat_d;
+const alias = @import("helper").alias;
+const formatInt = @import("helper").formatter.dInt;
 
 pub const sep: u8 = ';';
 
@@ -98,14 +95,15 @@ pub const SGR = struct {
 
                 c: u8,
 
-                pub fn format(self: Self, comptime _: []const u8, _: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
-                    try intFormat_d(Self.pre, writer);
+                pub fn format(self: Self, comptime _: []const u8, _: alias.FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
+                    try formatInt(Self.pre, writer);
                     try writer.writeByte(sep);
-                    return intFormat_d(self.c, writer);
+                    return formatInt(self.c, writer);
                 }
 
-                const _test = struct {
+                pub const _test = struct {
                     const testing = std.testing;
+                    const print = alias.print;
                     test Color256 {
                         try testing.expectEqualStrings("5;66", print("{}", .{Self{ .c = 66 }}));
                         try testing.expectEqualStrings("5;12", print("{}", .{Self{ .c = @intFromEnum(IBGR.blue) }}));
@@ -122,18 +120,19 @@ pub const SGR = struct {
                 g: u8,
                 b: u8,
 
-                pub fn format(self: Self, comptime _: []const u8, _: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
-                    try intFormat_d(Self.pre, writer);
+                pub fn format(self: Self, comptime _: []const u8, _: alias.FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
+                    try formatInt(Self.pre, writer);
                     try writer.writeByte(sep);
-                    try intFormat_d(self.r, writer);
+                    try formatInt(self.r, writer);
                     try writer.writeByte(sep);
-                    try intFormat_d(self.g, writer);
+                    try formatInt(self.g, writer);
                     try writer.writeByte(sep);
-                    return intFormat_d(self.b, writer);
+                    return formatInt(self.b, writer);
                 }
 
-                const _test = struct {
+                pub const _test = struct {
                     const testing = std.testing;
+                    const print = alias.print;
                     test ColorRGB {
                         try testing.expectEqualStrings("2;1;2;3", print("{}", .{Self{ .r = 1, .g = 2, .b = 3 }}));
                     }
@@ -216,8 +215,3 @@ pub const DSR = enum(u8) {
     /// Cursor position report (CPR): Answer is `ESC [ y ; x R`, where `x,y` is the cursor location
     CPR,
 };
-
-test {
-    _ = SGR.Color.ColorX.Color256._test;
-    _ = SGR.Color.ColorX.ColorRGB._test;
-}

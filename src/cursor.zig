@@ -1,94 +1,177 @@
-const F = @import("control.zig").CSISequenceFunction;
+const std = @import("std");
+const F = @import("mapping").F;
+const castU = @import("helper").castU;
+const castI = @import("helper").castI;
+const assert = std.debug.assert;
 
-pub fn apply(w: anytype) CursorWriter(@TypeOf(w)) {
-    return .new(w);
+/// Point or vector in a planar coordinate
+pub const Vec2 = @Vector(2, i32);
+pub const origin: Vec2 = .{ 0, 0 };
+
+/// Construct from any int type
+pub fn castVec2(x: anytype, y: anytype) Vec2 {
+    return .{ @intCast(x), @intCast(y) };
 }
+/// Scale `raw` with `scale`, return a new `Vec2`
+pub fn scaleVec2(raw: Vec2, scale: Vec2) ?Vec2 {
+    const x = @mulWithOverflow(raw[0], scale[0]);
+    if (x[1] != 0) return null;
+    const y = @mulWithOverflow(raw[1], scale[1]);
+    if (x[1] != 0) return null;
+    return .{ x[0], y[0] };
+}
+
+const _test = struct {
+    const t = std.testing;
+    test "Cast" {
+        try t.expectEqual(Vec2{ 1, -2 }, castVec2(@as(u16, 1), @as(i64, -2)));
+    }
+};
+
+pub const Region = union(enum) {
+    quad1,
+    quad2,
+    quad3,
+    quad4,
+    axisX: bool,
+    axisY: bool,
+    origin,
+
+    pub fn get(point: Vec2) Region {
+        const x, const y = point;
+        return if (x > 0 and y == 0) .{ .axisX = true } else if (x > 0 and y > 0) .quad1 else if (x == 0 and y > 0) .{ .axisY = true } else if (x < 0 and y > 0) .quad2 else if (x < 0 and y == 0) .{ .axisX = false } else if (x < 0 and y < 0) .quad3 else if (x == 0 and y < 0) .{ .axisY = false } else if (x > 0 and y < 0) .quad4 else .origin;
+    }
+
+    const _test = struct {
+        const t = std.testing;
+        test "Region check" {
+            try t.expect(get(.{ 1, 0 }).axisX);
+            try t.expect(get(.{ 1, 1 }) == .quad1);
+            try t.expect(get(.{ 0, 1 }).axisY);
+            try t.expect(get(.{ -1, 1 }) == .quad2);
+            try t.expect(!get(.{ -1, 0 }).axisX);
+            try t.expect(get(.{ -1, -1 }) == .quad3);
+            try t.expect(!get(.{ 0, -1 }).axisY);
+            try t.expect(get(.{ 1, -1 }) == .quad4);
+        }
+    };
+};
 
 pub fn CursorWriter(W: type) type {
     return struct {
+        w: W,
+
         const Self = @This();
-        inner: W,
+        pub const Error = W.Error;
 
         pub fn new(writer: W) Self {
-            return .{ .inner = writer };
-        }
-        pub fn up(self: Self, n: u32) W.Error!void {
-            try F.CUU.param(self.inner, "{d}", .{n});
-        }
-        pub fn down(self: Self, n: u32) W.Error!void {
-            // same as `F.VPR`
-            try F.CUD.param(self.inner, "{d}", .{n});
-        }
-        pub fn right(self: Self, n: u32) W.Error!void {
-            // same as `F.HPR`
-            try F.CUF.param(self.inner, "{d}", .{n});
-        }
-        pub fn left(self: Self, n: u32) W.Error!void {
-            try F.CUB.param(self.inner, "{d}", .{n});
-        }
-        pub fn upBegin(self: Self, n: u32) W.Error!void {
-            try F.CPL.param(self.inner, "{d}", .{n});
-        }
-        pub fn downBegin(self: Self, n: u32) W.Error!void {
-            try F.CNL.param(self.inner, "{d}", .{n});
-        }
-        pub fn columnAt(self: Self, n: u32) W.Error!void {
-            // same as `F.HPA`
-            try F.CHA.param(self.inner, "{d}", .{n});
-        }
-        pub fn rowAt(self: Self, n: u32) W.Error!void {
-            try F.VPA.param(self.inner, "{d}", .{n});
-        }
-        pub fn moveAt(self: Self, _row: u32, _column: u32) W.Error!void {
-            // same as `F.HVP`
-            try F.CUP.param(self.inner, "{d}{c}{d}", .{ _row, @import("parameter.zig").sep, _column });
-        }
-        pub fn save(self: Self) W.Error!void {
-            try F.CUS.param(self.inner, "", .{});
-        }
-        pub fn restore(self: Self) W.Error!void {
-            try F.CUR.param(self.inner, "", .{});
+            return .{ .w = writer };
         }
 
-        pub fn row(self: Self, n: i32) W.Error!void {
-            if (n == 0) return;
-            if (n > 0) {
-                try self.down(@intCast(n));
+        pub fn up(self: Self, u: anytype) Error!void {
+            if (u == 0) return;
+            try F.CUU.param(self.w, "{d}", .{castU(u)});
+        }
+        pub fn down(self: Self, u: anytype) Error!void {
+            if (u == 0) return;
+            // same as `F.VPR`
+            try F.CUD.param(self.w, "{d}", .{castU(u)});
+        }
+        pub fn right(self: Self, u: anytype) Error!void {
+            if (u == 0) return;
+            // same as `F.HPR`
+            try F.CUF.param(self.w, "{d}", .{castU(u)});
+        }
+        pub fn left(self: Self, u: anytype) Error!void {
+            if (u == 0) return;
+            try F.CUB.param(self.w, "{d}", .{castU(u)});
+        }
+
+        /// when u == 0?, columnAt(0)
+        pub fn upBegin(self: Self, u: anytype) Error!void {
+            try F.CPL.param(self.w, "{d}", .{castU(u)});
+        }
+        pub fn downBegin(self: Self, u: anytype) Error!void {
+            try F.CNL.param(self.w, "{d}", .{castU(u)});
+        }
+
+        pub fn columnAt(self: Self, u: anytype) Error!void {
+            // same as `F.HPA`
+            try F.CHA.param(self.w, "{d}", .{castU(u) + 1});
+        }
+        pub fn rowAt(self: Self, u: anytype) Error!void {
+            try F.VPA.param(self.w, "{d}", .{castU(u) + 1});
+        }
+        pub fn moveAt(self: Self, point: Vec2) Error!void {
+            assert(Region.get(point + Vec2{ 1, 1 }) == .quad1);
+            // same as `F.HVP`
+            try F.CUP.param(self.w, "{d}{c}{d}", .{
+                castU(point[1]) + 1,
+                @import("mapping").par.sep,
+                castU(point[0]) + 1,
+            });
+        }
+
+        pub fn save(self: Self) Error!void {
+            try F.CUS.param(self.w, "", .{});
+        }
+        pub fn restore(self: Self) Error!void {
+            try F.CUR.param(self.w, "", .{});
+        }
+
+        pub fn row(self: Self, _i: anytype) Error!void {
+            const i = castI(_i);
+            if (i == 0) return;
+            if (i > 0) {
+                try self.down(i);
             } else {
-                try self.up(@intCast(-n));
+                try self.up(-i);
             }
         }
-        pub fn column(self: Self, n: i32) W.Error!void {
-            if (n == 0) return;
-            if (n > 0) {
-                try self.right(@intCast(n));
+        pub fn column(self: Self, _i: anytype) Error!void {
+            const i = castI(_i);
+            if (i == 0) return;
+            if (i > 0) {
+                try self.right(i);
             } else {
-                try self.left(@intCast(-n));
+                try self.left(-i);
             }
         }
-        pub fn move(self: Self, _row: i32, _column: i32) W.Error!void {
-            try self.row(_row);
-            try self.column(_column);
+        pub fn move(self: Self, vector: Vec2) Error!void {
+            try self.row(vector[1]);
+            try self.column(vector[0]);
         }
     };
 }
+pub fn cursorWriter(w: anytype) CursorWriter(@TypeOf(w)) {
+    return .new(w);
+}
 
-pub fn PosiWriter(CW: type) type {
-    const W = @FieldType(CW, "inner");
+pub fn PosiPrinter(W: type) type {
+    comptime assert(@hasDecl(W, "print"));
+    comptime assert(@hasField(W, "w"));
     return struct {
+        w: W,
         const Self = @This();
-        writer: CW,
 
-        pub fn new(writer: CW) Self {
-            return .{ .writer = writer };
+        pub fn new(writer: W) Self {
+            return .{ .w = writer };
         }
-        pub fn printRel(self: Self, row: i32, column: i32, comptime fmt: []const u8, args: anytype) W.Error!void {
-            try CursorWriter(W).new(self.writer.inner).move(row, column);
-            try self.writer.print(fmt, args);
+        pub fn to(self: Self, vector: Vec2, comptime fmt: []const u8, args: anytype) !void {
+            try cursorWriter(self.w.w).move(vector);
+            try self.w.print(fmt, args);
         }
-        pub fn printAbs(self: Self, row: u32, column: u32, comptime fmt: []const u8, args: anytype) W.Error!void {
-            try CursorWriter(W).new(self.writer.inner).moveAt(row, column);
-            try self.writer.print(fmt, args);
+        pub fn at(self: Self, point: Vec2, comptime fmt: []const u8, args: anytype) !void {
+            try cursorWriter(self.w.w).moveAt(point);
+            try self.w.print(fmt, args);
         }
     };
+}
+pub fn posiPrinter(w: anytype) PosiPrinter(@TypeOf(w)) {
+    return .new(w);
+}
+
+test {
+    _ = Region._test;
+    _ = _test;
 }

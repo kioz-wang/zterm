@@ -4,7 +4,8 @@ const Arg = zargs.Arg;
 
 const app = Command.new("zterm_cli").requireSub("action")
     .version("0.0.1").author("Kioz Wang")
-    .sub(@import("Color8.zig").cmd);
+    .sub(@import("Color8.zig").cmd)
+    .sub(@import("Here.zig").cmd);
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}).init;

@@ -1,22 +1,22 @@
 const std = @import("std");
-const helper = @import("helper.zig");
-const print = helper.Alias.print;
-const sprint = helper.Alias.sprint;
-const String = helper.Alias.String;
-const LiteralString = helper.Alias.LiteralString;
-const FormatOptions = helper.Alias.FormatOptions;
-const anyFormat = helper.Formatter.anyFormat;
-const intFormat_d = helper.Formatter.intFormat_d;
-const enumFormat_d = helper.Formatter.enumFormat_d;
-const RawFormatter = helper.Formatter.RawFormatter;
-const rawFormatter = helper.Formatter.rawFormatter;
-const Flag = helper.Env.Flag;
-const parameter = @import("parameter.zig");
-const SGR = parameter.SGR;
+const alias = @import("helper").alias;
+const formatter = @import("helper").formatter;
+const Flag = @import("helper").env.Flag;
+
+const print = alias.print;
+const String = alias.String;
+const LiteralString = alias.LiteralString;
+const FormatOptions = alias.FormatOptions;
+
+const formatAny = formatter.any;
+const formatInt = formatter.dInt;
+
+const ctl = @import("mapping").ctl;
+const sep = @import("mapping").par.sep;
+const SGR = @import("mapping").par.SGR;
 const Color8 = SGR.Color.Color8;
 const Color256 = SGR.Color.ColorX.Color256;
 const ColorRGB = SGR.Color.ColorX.ColorRGB;
-const control = @import("control.zig");
 
 pub const Style = struct {
     const Self = @This();
@@ -54,9 +54,9 @@ pub const Style = struct {
         inline for (std.meta.fields(Storage)) |field| {
             if (self.field_get(field.name)) {
                 if (!first) {
-                    try writer.writeByte(parameter.sep);
+                    try writer.writeByte(sep);
                 }
-                try enumFormat_d(std.meta.stringToEnum(SGR.Style, field.name).?, writer);
+                try formatter.dEnum(std.meta.stringToEnum(SGR.Style, field.name).?, writer);
                 first = false;
             }
         }
@@ -156,24 +156,19 @@ pub const Color = struct {
             .default => {
                 var v = Color8.base(false) + Color8.default;
                 if (self.background) v += SGR.Color.offset;
-                return intFormat_d(v, writer);
+                return formatInt(v, writer);
             },
             .color8 => |c| {
                 var v = Color8.base(self._bright) + @intFromEnum(c);
                 if (self.background) v += SGR.Color.offset;
-                return intFormat_d(v, writer);
+                return formatInt(v, writer);
             },
-            else => {
+            inline .color256, .colorRGB => |c| {
                 var pre = SGR.Color.ColorX.pre;
                 if (self.background) pre += SGR.Color.offset;
-                try intFormat_d(pre, writer);
-                try writer.writeByte(parameter.sep);
-                switch (self.storage) {
-                    inline .color256, .colorRGB => |c| {
-                        return anyFormat(c, writer);
-                    },
-                    else => unreachable,
-                }
+                try formatInt(pre, writer);
+                try writer.writeByte(sep);
+                return formatAny(c, writer);
             },
         }
     }
@@ -252,28 +247,28 @@ pub const Attribute = struct {
         return self.field_set(@src().fn_name, v.bg());
     }
 
-    pub fn rawFormat(self: Self, comptime _: []const u8, _: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
-        try anyFormat(control.ESCSequence.CSI, writer);
+    pub fn rawFormat(self: Self, comptime _: []const u8, _: FormatOptions, w: anytype) @TypeOf(w).Error!void {
+        try formatAny(ctl.ESCSequence.CSI, w);
         var first = true;
         if (!self._trust) {
-            try intFormat_d(SGR.reset, writer);
+            try formatInt(SGR.reset, w);
             first = false;
         }
         inline for (std.meta.fields(Storage)) |field| {
             if (@field(self.storage, field.name)) |v| {
                 if (!first) {
-                    try writer.writeByte(parameter.sep);
+                    try w.writeByte(sep);
                 }
-                try anyFormat(v, writer);
+                try formatAny(v, w);
                 first = false;
             }
         }
-        try anyFormat(control.CSISequenceFunction.SGR, writer);
+        try formatAny(ctl.CSISequenceFunction.SGR, w);
     }
-    pub fn raw(self: Self) RawFormatter(Self) {
-        return rawFormatter(self);
+    pub fn raw(self: Self) formatter.Raw(Self) {
+        return formatter.raw(self);
     }
-    pub fn format(self: Self, comptime _: []const u8, _: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
+    pub fn format(self: Self, comptime _: []const u8, _: FormatOptions, w: anytype) @TypeOf(w).Error!void {
         if (self._no_color orelse Flag("NO_COLOR").check() and
             self._no_style orelse Flag("NO_STYLE").check())
             return;
@@ -285,7 +280,7 @@ pub const Attribute = struct {
         if (self._no_style orelse Flag("NO_STYLE").check()) {
             obj.storage.style = null;
         }
-        try obj.rawFormat(undefined, undefined, writer);
+        try obj.rawFormat(undefined, undefined, w);
     }
 
     fn field_style_set(self: Self, comptime name: LiteralString) Self {
@@ -439,6 +434,7 @@ pub const Attribute = struct {
                 print("{}", .{comptime new().trust().colorRGB(1, 2, 3).raw()}),
             );
             {
+                const sprint = alias.sprint;
                 var buffer0: [32]u8 = undefined;
                 var buffer1: [32]u8 = undefined;
                 try testing.expectEqualStrings(
@@ -452,54 +448,54 @@ pub const Attribute = struct {
     pub fn value(self: Self, v: anytype) Value(@TypeOf(v)) {
         return .new(self, v);
     }
-    pub fn apply(self: Self, w: anytype) AttrWriter(@TypeOf(w)) {
+    pub fn writer(self: Self, w: anytype) AttrWriter(@TypeOf(w)) {
         return .new(self, w);
     }
 };
 
-pub fn Value(T: type) type {
+pub fn Value(V: type) type {
     return struct {
-        attribute: Attribute,
-        value: T,
+        a: Attribute,
+        v: V,
 
         const Self = @This();
 
-        pub fn new(attr: Attribute, value: T) Self {
-            return .{ .attribute = attr, .value = value };
+        pub fn new(attr: Attribute, value: V) Self {
+            return .{ .a = attr, .v = value };
         }
 
         pub fn rawFormat(self: Self, comptime fmt: []const u8, options: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
-            try anyFormat(self.attribute.raw(), writer);
-            try std.fmt.formatType(self.value, fmt, options, writer, std.fmt.default_max_depth);
+            try formatAny(self.a.raw(), writer);
+            try std.fmt.formatType(self.v, fmt, options, writer, std.fmt.default_max_depth);
         }
-        pub fn raw(self: Self) RawFormatter(Self) {
-            return rawFormatter(self);
+        pub fn raw(self: Self) formatter.Raw(Self) {
+            return formatter.raw(self);
         }
         pub fn format(self: Self, comptime fmt: []const u8, options: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
-            try anyFormat(self.attribute, writer);
-            try std.fmt.formatType(self.value, fmt, options, writer, std.fmt.default_max_depth);
+            try formatAny(self.a, writer);
+            try std.fmt.formatType(self.v, fmt, options, writer, std.fmt.default_max_depth);
         }
     };
 }
 
 pub fn AttrWriter(W: type) type {
-    const PosiWriter = @import("cursor.zig").PosiWriter;
+    const PosiPrinter = @import("cursor").PosiPrinter;
 
     return struct {
-        attribute: Attribute,
-        inner: W,
+        a: Attribute,
+        w: W,
 
         const Self = @This();
 
         pub fn new(attr: Attribute, writer: W) Self {
-            return .{ .attribute = attr, .inner = writer };
+            return .{ .a = attr, .w = writer };
         }
 
         pub fn print(self: Self, comptime fmt: []const u8, args: anytype) W.Error!void {
-            try anyFormat(self.attribute, self.inner);
-            try self.inner.print(fmt, args);
+            try formatAny(self.a, self.w);
+            try self.w.print(fmt, args);
         }
-        pub fn positioner(self: Self) PosiWriter(Self) {
+        pub fn posiPrint(self: Self) PosiPrinter(Self) {
             return .new(self);
         }
     };
@@ -529,7 +525,7 @@ const _test = struct {
     test AttrWriter {
         var buffer = std.mem.zeroes([512]u8);
         var bufferStream = std.io.fixedBufferStream(&buffer);
-        const writer = Preset.trust().no_color(false).no_style(false).apply(bufferStream.writer());
+        const writer = Preset.trust().no_color(false).no_style(false).writer(bufferStream.writer());
         try writer.print("string {s} int {d}", .{ "hello", 6 });
         try testing.expectEqualStrings(
             "\x1b[1;21;32;47mstring hello int 6",
