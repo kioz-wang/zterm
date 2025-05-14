@@ -64,7 +64,7 @@ fn gYm(self: Self) !void {
             std.time.sleep(std.time.ns_per_ms * ms);
         }
     }
-    try term.getAttror(.reset).print("", .{});
+    try term.getAttror(.default).print("", .{});
 
     var col: i32 = 1;
     while (col <= 8) : (col += 1) {

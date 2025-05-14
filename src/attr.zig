@@ -18,6 +18,26 @@ const Color8 = SGR.Color.Color8;
 const Color256 = SGR.Color.ColorX.Color256;
 const ColorRGB = SGR.Color.ColorX.ColorRGB;
 
+const literalize = struct {
+    fn count(attr: anytype) usize {
+        var writer = std.io.countingWriter(std.io.null_writer);
+        @setEvalBranchQuota(100000); // TODO why?
+        attr.stringify(writer.writer(), true) catch unreachable;
+        return writer.bytes_written;
+    }
+    inline fn cast(attr: anytype) *const [count(attr):0]u8 {
+        comptime {
+            var buf: [count(attr):0]u8 = undefined;
+            var fbs = std.io.fixedBufferStream(&buf);
+            @setEvalBranchQuota(100000); // TODO why?
+            attr.stringify(fbs.writer(), true) catch unreachable;
+            buf[buf.len] = 0;
+            const final = buf;
+            return &final;
+        }
+    }
+};
+
 pub const Style = struct {
     const Self = @This();
     const Storage = packed struct {
@@ -35,32 +55,53 @@ pub const Style = struct {
         off_reverse_video: u1,
     };
     storage: Storage,
+    flag_force_no: ?bool = null,
 
     pub fn new() Self {
         return std.mem.zeroes(Self);
     }
-    pub fn set(self: Self, style: SGR.Style, enable: bool) Self {
+    pub fn set(self: Self, style: SGR.Style) Self {
+        return self.runtime_field_set(style, true);
+    }
+    pub fn unset(self: Self, style: SGR.Style) Self {
+        return self.runtime_field_set(style, false);
+    }
+    pub fn force(self: Self, b: bool) Self {
         var obj = self;
-        inline for (std.meta.fields(Storage)) |field| {
-            if (std.mem.eql(u8, field.name, @tagName(style))) {
-                return obj.field_set(field.name, enable);
-            }
-        }
-        unreachable;
+        obj.flag_force_no = !b;
+        return obj;
     }
 
-    pub fn format(self: Self, comptime _: []const u8, _: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
-        var first = true;
-        inline for (std.meta.fields(Storage)) |field| {
-            if (self.field_get(field.name)) {
-                if (!first) {
-                    try writer.writeByte(sep);
-                }
-                try formatter.dEnum(std.meta.stringToEnum(SGR.Style, field.name).?, writer);
-                first = false;
-            }
-        }
+    pub fn fprint(self: Self, w: anytype, comptime fmt: []const u8, args: anytype) @TypeOf(w).Error!void {
+        try self.stringifyEnv(w, true);
+        try std.fmt.format(w, fmt, args);
     }
+    pub fn format(self: Self, comptime _: []const u8, _: FormatOptions, w: anytype) @TypeOf(w).Error!void {
+        try self.stringifyEnv(w, true);
+    }
+    pub fn toString(self: Self) *const [literalize.count(self):0]u8 {
+        return literalize.cast(self);
+    }
+
+    const _test = struct {
+        const testing = std.testing;
+        test Style {
+            try testing.expectEqualStrings("", comptime new().toString());
+            try testing.expectEqualStrings("\x1b[1m", comptime new().set(.bold).toString());
+            try testing.expectEqualStrings(
+                "\x1b[1;21m",
+                comptime new().set(.bold).set(.underline).toString(),
+            );
+            try testing.expectEqualStrings(
+                "\x1b[1;3;21m",
+                comptime new().set(.bold).set(.underline).set(.italic).toString(),
+            );
+            try testing.expectEqualStrings(
+                comptime new().set(.bold).set(.italic).toString(),
+                comptime new().set(.bold).set(.underline).set(.italic).unset(.underline).toString(),
+            );
+        }
+    };
 
     fn field_set(self: Self, comptime name: LiteralString, enable: bool) Self {
         var obj = self;
@@ -70,29 +111,31 @@ pub const Style = struct {
     fn field_get(self: Self, comptime name: LiteralString) bool {
         return 1 == @field(self.storage, name);
     }
-
-    const _test = struct {
-        const testing = std.testing;
-        test Style {
-            try testing.expectEqualStrings("", print("{}", .{comptime new()}));
-            try testing.expectEqualStrings("1", print("{}", .{comptime new().set(.bold, true)}));
-            try testing.expectEqualStrings(
-                "1;21",
-                print("{}", .{comptime new().set(.bold, true).set(.underline, true)}),
-            );
-            try testing.expectEqualStrings(
-                "1;3;21",
-                print("{}", .{comptime new()
-                    .set(.bold, true)
-                    .set(.underline, true)
-                    .set(.italic, true)}),
-            );
-            try testing.expectEqualStrings(
-                print("{}", .{comptime new().set(.bold, true).set(.italic, true)}),
-                print("{}", .{comptime new().set(.bold, true).set(.underline, true).set(.italic, true).set(.underline, false)}),
-            );
+    fn runtime_field_set(self: Self, style: SGR.Style, enable: bool) Self {
+        inline for (std.meta.fields(Storage)) |field| {
+            if (std.mem.eql(u8, field.name, @tagName(style))) {
+                return self.field_set(field.name, enable);
+            }
         }
-    };
+        unreachable;
+    }
+
+    fn stringify(self: Self, w: anytype, csi: bool) @TypeOf(w).Error!void {
+        var first = true;
+        inline for (std.meta.fields(Storage)) |field| {
+            if (self.field_get(field.name)) {
+                if (csi and first) try formatAny(ctl.ESCSequence.CSI, w);
+                if (!first) try w.writeByte(sep);
+                try formatter.dEnum(std.meta.stringToEnum(SGR.Style, field.name).?, w);
+                first = false;
+            }
+        }
+        if (csi and !first) try formatAny(ctl.CSISequenceFunction.SGR, w);
+    }
+    fn stringifyEnv(self: Self, w: anytype, csi: bool) @TypeOf(w).Error!void {
+        if (self.flag_force_no orelse Flag("NO_STYLE").check()) return;
+        try self.stringify(w, csi);
+    }
 };
 
 pub const Color = struct {
@@ -103,15 +146,16 @@ pub const Color = struct {
         color256: Color256,
         colorRGB: ColorRGB,
     };
-    /// bright versions of color8
-    _bright: bool = false,
-    background: bool = false,
     storage: Storage,
+    /// bright versions of color8
+    flag_bright: bool = false,
+    flag_bg: bool = false,
+    flag_force_no: ?bool = null,
 
     /// set default color (before Linux 3.16: set underscore off, set default color)
     pub const default: Self = .{ .storage = .default };
     pub fn color8(color: Color8, bright: bool) Self {
-        return .{ .storage = .{ .color8 = color }, ._bright = bright };
+        return .{ .storage = .{ .color8 = color }, .flag_bright = bright };
     }
     pub fn color256(c: u8) Self {
         return .{ .storage = .{ .color256 = .{ .c = c } } };
@@ -121,12 +165,17 @@ pub const Color = struct {
     }
     pub fn fg(self: Self) Self {
         var obj = self;
-        obj.background = false;
+        obj.flag_bg = false;
         return obj;
     }
     pub fn bg(self: Self) Self {
         var obj = self;
-        obj.background = true;
+        obj.flag_bg = true;
+        return obj;
+    }
+    pub fn force(self: Self, b: bool) Self {
+        var obj = self;
+        obj.flag_force_no = !b;
         return obj;
     }
 
@@ -151,40 +200,29 @@ pub const Color = struct {
         return colorHex(c);
     }
 
-    pub fn format(self: Self, comptime _: []const u8, _: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
-        switch (self.storage) {
-            .default => {
-                var v = Color8.base(false) + Color8.default;
-                if (self.background) v += SGR.Color.offset;
-                return formatInt(v, writer);
-            },
-            .color8 => |c| {
-                var v = Color8.base(self._bright) + @intFromEnum(c);
-                if (self.background) v += SGR.Color.offset;
-                return formatInt(v, writer);
-            },
-            inline .color256, .colorRGB => |c| {
-                var pre = SGR.Color.ColorX.pre;
-                if (self.background) pre += SGR.Color.offset;
-                try formatInt(pre, writer);
-                try writer.writeByte(sep);
-                return formatAny(c, writer);
-            },
-        }
+    pub fn fprint(self: Self, w: anytype, comptime fmt: []const u8, args: anytype) @TypeOf(w).Error!void {
+        try self.stringifyEnv(w, true);
+        try std.fmt.format(w, fmt, args);
+    }
+    pub fn format(self: Self, comptime _: []const u8, _: FormatOptions, w: anytype) @TypeOf(w).Error!void {
+        try self.stringifyEnv(w, true);
+    }
+    pub fn toString(self: Self) *const [literalize.count(self):0]u8 {
+        return literalize.cast(self);
     }
 
     const _test = struct {
         const testing = std.testing;
         test Color {
-            try testing.expectEqualStrings("39", print("{}", .{comptime default}));
-            try testing.expectEqualStrings("49", print("{}", .{comptime default.bg()}));
-            try testing.expectEqualStrings("34", print("{}", .{comptime color8(.blue, false)}));
-            try testing.expectEqualStrings("94", print("{}", .{comptime color8(.blue, true)}));
-            try testing.expectEqualStrings("44", print("{}", .{comptime color8(.blue, false).bg()}));
-            try testing.expectEqualStrings("38;5;9", print("{}", .{comptime color256(9)}));
-            try testing.expectEqualStrings("48;5;9", print("{}", .{comptime color256(9).bg()}));
-            try testing.expectEqualStrings("38;2;1;2;3", print("{}", .{comptime colorRGB(1, 2, 3)}));
-            try testing.expectEqualStrings("48;2;1;2;3", print("{}", .{comptime colorRGB(1, 2, 3).bg()}));
+            try testing.expectEqualStrings("\x1b[39m", comptime default.toString());
+            try testing.expectEqualStrings("\x1b[49m", comptime default.bg().toString());
+            try testing.expectEqualStrings("\x1b[34m", comptime color8(.blue, false).toString());
+            try testing.expectEqualStrings("\x1b[94m", comptime color8(.blue, true).toString());
+            try testing.expectEqualStrings("\x1b[44m", comptime color8(.blue, false).bg().toString());
+            try testing.expectEqualStrings("\x1b[38;5;9m", comptime color256(9).toString());
+            try testing.expectEqualStrings("\x1b[48;5;9m", comptime color256(9).bg().toString());
+            try testing.expectEqualStrings("\x1b[38;2;1;2;3m", comptime colorRGB(1, 2, 3).toString());
+            try testing.expectEqualStrings("\x1b[48;2;1;2;3m", comptime colorRGB(1, 2, 3).bg().toString());
             try testing.expectEqual(color256(9), color256(9).fg());
             try testing.expectEqual(color256(9).bg(), color256(9).fg().bg());
             try testing.expectEqual(color256(13), colorIBGR(.fuchsia));
@@ -197,6 +235,34 @@ pub const Color = struct {
             try testing.expectEqual(colorRGB(1, 2, 3), comptime colorHexS("0x10203"));
         }
     };
+
+    fn stringify(self: Self, w: anytype, csi: bool) @TypeOf(w).Error!void {
+        if (csi) try formatAny(ctl.ESCSequence.CSI, w);
+        switch (self.storage) {
+            .default => {
+                var v = Color8.base(false) + Color8.default;
+                if (self.flag_bg) v += SGR.Color.offset;
+                try formatInt(v, w);
+            },
+            .color8 => |c| {
+                var v = Color8.base(self.flag_bright) + @intFromEnum(c);
+                if (self.flag_bg) v += SGR.Color.offset;
+                try formatInt(v, w);
+            },
+            inline .color256, .colorRGB => |c| {
+                var pre = SGR.Color.ColorX.pre;
+                if (self.flag_bg) pre += SGR.Color.offset;
+                try formatInt(pre, w);
+                try w.writeByte(sep);
+                try formatAny(c, w);
+            },
+        }
+        if (csi) try formatAny(ctl.CSISequenceFunction.SGR, w);
+    }
+    fn stringifyEnv(self: Self, w: anytype, csi: bool) @TypeOf(w).Error!void {
+        if (self.flag_force_no orelse Flag("NO_COLOR").check()) return;
+        try self.stringify(w, csi);
+    }
 };
 
 pub const Attribute = struct {
@@ -207,38 +273,34 @@ pub const Attribute = struct {
         bgColor: ?Color = null,
     };
     storage: Storage,
-    _trust: bool = false,
-    _no_color: ?bool = null,
-    _no_style: ?bool = null,
+    flag_strict: bool = false,
+    flag_force_no_color: ?bool = null,
+    flag_force_no_style: ?bool = null,
 
     pub fn new() Self {
         return .{ .storage = .{} };
     }
-    /// dont reset all attributes to their defaults first
-    pub fn trust(self: Self) Self {
+    /// reset to default first
+    pub fn strict(self: Self) Self {
         var obj = self;
-        obj._trust = true;
+        obj.flag_strict = true;
         return obj;
     }
-    pub fn no_color(self: Self, b: bool) Self {
+    pub const default = new().strict();
+    pub fn force_color(self: Self, b: bool) Self {
         var obj = self;
-        obj._no_color = b;
+        obj.flag_force_no_color = !b;
         return obj;
     }
-    pub fn no_style(self: Self, b: bool) Self {
+    pub fn force_style(self: Self, b: bool) Self {
         var obj = self;
-        obj._no_style = b;
+        obj.flag_force_no_style = !b;
         return obj;
     }
-    pub const reset = new();
 
-    fn field_set(self: Self, comptime name: LiteralString, v: @FieldType(Storage, name)) Self {
-        var obj = self;
-        @field(obj.storage, name) = v;
-        return obj;
-    }
     pub fn style(self: Self, v: Style) Self {
-        return self.field_set(@src().fn_name, v);
+        if (v.storage != Style.new().storage)
+            return self.field_set(@src().fn_name, v);
     }
     pub fn color(self: Self, v: Color) Self {
         return self.field_set(@src().fn_name, v.fg());
@@ -247,48 +309,17 @@ pub const Attribute = struct {
         return self.field_set(@src().fn_name, v.bg());
     }
 
-    pub fn rawFormat(self: Self, comptime _: []const u8, _: FormatOptions, w: anytype) @TypeOf(w).Error!void {
-        try formatAny(ctl.ESCSequence.CSI, w);
-        var first = true;
-        if (!self._trust) {
-            try formatInt(SGR.reset, w);
-            first = false;
-        }
-        inline for (std.meta.fields(Storage)) |field| {
-            if (@field(self.storage, field.name)) |v| {
-                if (!first) {
-                    try w.writeByte(sep);
-                }
-                try formatAny(v, w);
-                first = false;
-            }
-        }
-        try formatAny(ctl.CSISequenceFunction.SGR, w);
-    }
-    pub fn raw(self: Self) formatter.Raw(Self) {
-        return formatter.raw(self);
+    pub fn fprint(self: Self, w: anytype, comptime fmt: []const u8, args: anytype) @TypeOf(w).Error!void {
+        try self.stringifyEnv(w, true);
+        try std.fmt.format(w, fmt, args);
     }
     pub fn format(self: Self, comptime _: []const u8, _: FormatOptions, w: anytype) @TypeOf(w).Error!void {
-        if (self._no_color orelse Flag("NO_COLOR").check() and
-            self._no_style orelse Flag("NO_STYLE").check())
-            return;
-        var obj = self;
-        if (self._no_color orelse Flag("NO_COLOR").check()) {
-            obj.storage.color = null;
-            obj.storage.bgColor = null;
-        }
-        if (self._no_style orelse Flag("NO_STYLE").check()) {
-            obj.storage.style = null;
-        }
-        try obj.rawFormat(undefined, undefined, w);
+        try self.stringifyEnv(w, true);
+    }
+    pub fn toString(self: Self) *const [literalize.count(self):0]u8 {
+        return literalize.cast(self);
     }
 
-    fn field_style_set(self: Self, comptime name: LiteralString) Self {
-        var obj = self;
-        const _style = obj.storage.style orelse Style.new();
-        obj.storage.style = _style.field_set(name, true);
-        return obj;
-    }
     pub fn bold(self: Self) Self {
         return self.field_style_set(@src().fn_name);
     }
@@ -338,10 +369,6 @@ pub const Attribute = struct {
     pub fn bgBrightColor8(self: Self, c: SGR.Color.Color8) Self {
         return self.bgColor(Color.color8(c, true));
     }
-    fn field_color8_set(self: Self, comptime name: LiteralString) Self {
-        const c = std.meta.stringToEnum(SGR.Color.Color8, name).?;
-        return self.color8(c);
-    }
     pub fn black(self: Self) Self {
         return self.field_color8_set(@src().fn_name);
     }
@@ -386,31 +413,26 @@ pub const Attribute = struct {
         test "Attribute raw APIs" {
             try testing.expectEqualStrings(
                 "\x1b[0;1;34m",
-                print("{}", .{comptime new()
-                    .style(Style.new().set(.bold, true))
-                    .color(Color.color8(.blue, false))
-                    .raw()}),
+                comptime new().strict().style(Style.new().set(.bold))
+                    .color(Color.color8(.blue, false)).toString(),
             );
             try testing.expectEqualStrings(
                 "\x1b[1;3;39;107m",
-                print("{}", .{comptime new().trust()
-                    .style(Style.new().set(.bold, true).set(.italic, true))
+                comptime new()
+                    .style(Style.new().set(.bold).set(.italic))
                     .color(Color.default)
-                    .bgColor(Color.color8(.white, true))
-                    .raw()}),
+                    .bgColor(Color.color8(.white, true)).toString(),
             );
             try testing.expectEqualStrings(
                 "\x1b[1;38;2;1;2;3m",
-                print("{}", .{comptime new().trust()
-                    .style(Style.new().set(.bold, true))
-                    .color(Color.colorRGB(1, 2, 3))
-                    .raw()}),
+                comptime new().style(Style.new().set(.bold))
+                    .color(Color.colorRGB(1, 2, 3)).toString(),
             );
         }
         test "Attribute style APIs" {
             try testing.expectEqualStrings(
                 "\x1b[0;1;21m",
-                print("{}", .{comptime new().bold().underline().raw()}),
+                comptime new().strict().bold().underline().toString(),
             );
         }
         test "Attribute color8 APIs" {
@@ -419,8 +441,8 @@ pub const Attribute = struct {
             try testing.expectEqual(new().brightColor8(.blue), new().color(Color.color8(.blue, true)));
             try testing.expectEqual(new().bgBrightColor8(.blue), new().bgColor(Color.color8(.blue, true)));
             try testing.expectEqual(new().blue(), new().color8(.blue));
-            try testing.expectEqualStrings("\x1b[30m", print("{}", .{comptime new().black().trust().raw()}));
-            try testing.expectEqualStrings("\x1b[41m", print("{}", .{comptime new().bgColor8(.red).trust().raw()}));
+            try testing.expectEqualStrings("\x1b[30m", comptime new().black().toString());
+            try testing.expectEqualStrings("\x1b[41m", comptime new().bgColor8(.red).toString());
         }
         test "Attribute color256 APIs" {
             try testing.expectEqual(new().color256(1), new().color(Color.color256(1)));
@@ -429,21 +451,66 @@ pub const Attribute = struct {
         test "Attribute colorRGB APIs" {
             try testing.expectEqual(new().colorRGB(1, 2, 3), new().color(Color.colorRGB(1, 2, 3)));
             try testing.expectEqual(new().bgColorRGB(1, 2, 3), new().bgColor(Color.colorRGB(1, 2, 3)));
-            try testing.expectEqualStrings(
-                "\x1b[38;2;1;2;3m",
-                print("{}", .{comptime new().trust().colorRGB(1, 2, 3).raw()}),
-            );
+            try testing.expectEqualStrings("\x1b[38;2;1;2;3m", comptime new().colorRGB(1, 2, 3).toString());
             {
                 const sprint = alias.sprint;
                 var buffer0: [32]u8 = undefined;
                 var buffer1: [32]u8 = undefined;
                 try testing.expectEqualStrings(
-                    try sprint(&buffer0, "{}", .{new().trust().colorRGB(1, 2, 3).bold().no_style(true).no_color(false)}),
-                    try sprint(&buffer1, "{}", .{new().trust().colorRGB(1, 2, 3).italic().no_style(true).no_color(false)}),
+                    try sprint(&buffer0, "{}", .{new().colorRGB(1, 2, 3).bold().force_style(false).force_color(true)}),
+                    try sprint(&buffer1, "{}", .{new().colorRGB(1, 2, 3).italic().force_style(false).force_color(true)}),
                 );
             }
         }
     };
+
+    fn field_set(self: Self, comptime name: LiteralString, v: @FieldType(Storage, name)) Self {
+        var obj = self;
+        @field(obj.storage, name) = v;
+        return obj;
+    }
+    fn field_style_set(self: Self, comptime name: LiteralString) Self {
+        var obj = self;
+        const _style = obj.storage.style orelse Style.new();
+        obj.storage.style = _style.field_set(name, true);
+        return obj;
+    }
+    fn field_color8_set(self: Self, comptime name: LiteralString) Self {
+        const c = std.meta.stringToEnum(SGR.Color.Color8, name).?;
+        return self.color8(c);
+    }
+
+    fn stringify(self: Self, w: anytype, csi: bool) @TypeOf(w).Error!void {
+        var first = true;
+        if (self.flag_strict) {
+            if (csi) try formatAny(ctl.ESCSequence.CSI, w);
+            try formatInt(SGR.reset, w);
+            first = false;
+        }
+        inline for (std.meta.fields(Storage)) |field| {
+            if (@field(self.storage, field.name)) |v| {
+                if (csi and first) try formatAny(ctl.ESCSequence.CSI, w);
+                if (!first) try w.writeByte(sep);
+                try v.stringify(w, false);
+                first = false;
+            }
+        }
+        if (csi and !first) try formatAny(ctl.CSISequenceFunction.SGR, w);
+    }
+    fn stringifyEnv(self: Self, w: anytype, csi: bool) @TypeOf(w).Error!void {
+        if (self.flag_force_no_color orelse Flag("NO_COLOR").check() and
+            self.flag_force_no_style orelse Flag("NO_STYLE").check())
+            return;
+        var obj = self;
+        if (self.flag_force_no_color orelse Flag("NO_COLOR").check()) {
+            obj.storage.color = null;
+            obj.storage.bgColor = null;
+        }
+        if (self.flag_force_no_style orelse Flag("NO_STYLE").check()) {
+            obj.storage.style = null;
+        }
+        try obj.stringify(w, csi);
+    }
 
     pub fn value(self: Self, v: anytype) Value(@TypeOf(v)) {
         return .new(self, v);
@@ -461,19 +528,13 @@ pub fn Value(V: type) type {
         const Self = @This();
 
         pub fn new(attr: Attribute, value: V) Self {
-            return .{ .a = attr, .v = value };
+            return .{ .a = attr.strict(), .v = value };
         }
 
-        pub fn rawFormat(self: Self, comptime fmt: []const u8, options: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
-            try formatAny(self.a.raw(), writer);
-            try std.fmt.formatType(self.v, fmt, options, writer, std.fmt.default_max_depth);
-        }
-        pub fn raw(self: Self) formatter.Raw(Self) {
-            return formatter.raw(self);
-        }
-        pub fn format(self: Self, comptime fmt: []const u8, options: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
-            try formatAny(self.a, writer);
-            try std.fmt.formatType(self.v, fmt, options, writer, std.fmt.default_max_depth);
+        pub fn format(self: Self, comptime fmt: []const u8, options: FormatOptions, w: anytype) @TypeOf(w).Error!void {
+            try self.a.stringifyEnv(w, true);
+            try std.fmt.formatType(self.v, fmt, options, w, std.fmt.default_max_depth);
+            try Attribute.default.stringifyEnv(w, true);
         }
     };
 }
@@ -492,8 +553,7 @@ pub fn AttrWriter(W: type) type {
         }
 
         pub fn print(self: Self, comptime fmt: []const u8, args: anytype) W.Error!void {
-            try formatAny(self.a, self.w);
-            try self.w.print(fmt, args);
+            try self.a.fprint(self.w, fmt, args);
         }
         pub fn posiPrint(self: Self) PosiPrinter(Self) {
             return .new(self);
@@ -503,29 +563,28 @@ pub fn AttrWriter(W: type) type {
 
 const _test = struct {
     const testing = std.testing;
-    const Preset = Attribute.new().bold().green().bgColor8(.white).underline();
-    test "Rich String" {
+    const sprint = alias.sprint;
+    const attr = Attribute.new().force_style(true).force_color(true)
+        .bold().green().bgColor8(.white).underline();
+    test "Rich Value" {
+        var buffer: [32]u8 = undefined;
         try testing.expectEqualStrings(
-            "\x1b[1;21;32;47mhello",
-            print("{s}", .{comptime Preset.trust().value("hello").raw()}),
+            "\x1b[0;1;21;32;47mhello\x1b[0m",
+            try sprint(&buffer, "{s}", .{attr.value("hello")}),
+        );
+        try testing.expectEqualStrings(
+            "\x1b[0;1;21;32;47m00c1\x1b[0m",
+            try sprint(&buffer, "{x:04}", .{attr.value(0xc1)}),
+        );
+        try testing.expectEqualStrings(
+            "\x1b[0;1;21;32;47mtrue\x1b[0m",
+            try sprint(&buffer, "{}", .{attr.value(true)}),
         );
     }
-    test "Rich int" {
-        try testing.expectEqualStrings(
-            "\x1b[1;21;32;47m00c1",
-            print("{x:04}", .{comptime Preset.trust().value(0xc1).raw()}),
-        );
-    }
-    test "Rich bool" {
-        try testing.expectEqualStrings(
-            "\x1b[0;1;21;32;47mtrue",
-            print("{}", .{comptime Preset.value(true).raw()}),
-        );
-    }
-    test AttrWriter {
+    test "Rich Writer" {
         var buffer = std.mem.zeroes([512]u8);
         var bufferStream = std.io.fixedBufferStream(&buffer);
-        const writer = Preset.trust().no_color(false).no_style(false).writer(bufferStream.writer());
+        const writer = attr.writer(bufferStream.writer());
         try writer.print("string {s} int {d}", .{ "hello", 6 });
         try testing.expectEqualStrings(
             "\x1b[1;21;32;47mstring hello int 6",
