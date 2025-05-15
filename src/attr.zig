@@ -116,7 +116,7 @@ pub const Style = struct {
                 comptime new().set(.bold).set(.underline).set(.italic).unset(.underline).toString(),
             );
         }
-        test " Style Value" {
+        test "Style Value" {
             const sprint = alias.sprint;
             var buffer: [32]u8 = undefined;
             try testing.expectEqualStrings(
@@ -633,7 +633,13 @@ pub fn Value(A: type, V: type) type {
         pub fn format(self: Self, comptime fmt: []const u8, options: FormatOptions, w: anytype) @TypeOf(w).Error!void {
             try self.a.stringifyEnv(w, true);
             try std.fmt.formatType(self.v, fmt, options, w, std.fmt.default_max_depth);
-            try Attribute.default.stringifyEnv(w, true);
+            var default = Attribute.default;
+            default.flag_force_no_color, default.flag_force_no_style =
+                if (@hasField(A, "flag_force_no"))
+                    .{ self.a.flag_force_no, self.a.flag_force_no }
+                else
+                    .{ self.a.flag_force_no_color, self.a.flag_force_no_style };
+            try default.stringifyEnv(w, true);
         }
     };
 }
