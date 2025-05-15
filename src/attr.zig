@@ -121,11 +121,11 @@ pub const Style = struct {
             var buffer: [32]u8 = undefined;
             try testing.expectEqualStrings(
                 "\x1b[0;1mhello\x1b[0m",
-                try sprint(&buffer, "{s}", .{new().set(.bold).value("hello")}),
+                try sprint(&buffer, "{s}", .{new().set(.bold).force(true).value("hello")}),
             );
             try testing.expectEqualStrings(
                 "\x1b[0;1mcc\x1b[0m",
-                try sprint(&buffer, "{x}", .{new().set(.bold).value(@as(u16, 0xcc))}),
+                try sprint(&buffer, "{x}", .{new().set(.bold).force(true).value(@as(u16, 0xcc))}),
             );
         }
     };
@@ -283,11 +283,15 @@ pub const Color = struct {
             var buffer: [32]u8 = undefined;
             try testing.expectEqualStrings(
                 "\x1b[0;38;2;1;2;3mhello\x1b[0m",
-                try sprint(&buffer, "{s}", .{(colorHexS("#010203") catch unreachable).value("hello")}),
+                try sprint(
+                    &buffer,
+                    "{s}",
+                    .{(colorHexS("#010203") catch unreachable).force(true).value("hello")},
+                ),
             );
             try testing.expectEqualStrings(
                 "\x1b[0;94mcc\x1b[0m",
-                try sprint(&buffer, "{x}", .{color8(.blue, true).value(@as(u16, 0xcc))}),
+                try sprint(&buffer, "{x}", .{color8(.blue, true).force(true).value(@as(u16, 0xcc))}),
             );
         }
     };
