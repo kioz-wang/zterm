@@ -388,9 +388,6 @@ pub const Attribute = struct {
     pub fn value(self: Self, v: anytype) Value(Self, @TypeOf(v)) {
         return .new(self, v);
     }
-    pub fn writer(self: Self, w: anytype) AttrWriter(@TypeOf(w)) {
-        return .new(self, w);
-    }
 
     pub fn bold(self: Self) Self {
         return self.field_style_set(@src().fn_name);
@@ -561,9 +558,8 @@ pub const Attribute = struct {
             const attr = Attribute.new().force_style(true).force_color(true)
                 .bold().green().bgColor8(.white).underline();
             var buffer = std.mem.zeroes([512]u8);
-            var bufferStream = std.io.fixedBufferStream(&buffer);
-            const w = attr.writer(bufferStream.writer());
-            try w.print("string {s} int {d}", .{ "hello", 6 });
+            var bs = std.io.fixedBufferStream(&buffer);
+            try attr.fprint(bs.writer(), "string {s} int {d}", .{ "hello", 6 });
             try testing.expectEqualStrings(
                 "\x1b[1;21;32;47mstring hello int 6",
                 std.mem.sliceTo(&buffer, 0),
@@ -640,28 +636,6 @@ pub fn Value(A: type, V: type) type {
                 else
                     .{ self.a.flag_force_no_color, self.a.flag_force_no_style };
             try default.stringifyEnv(w, true);
-        }
-    };
-}
-
-pub fn AttrWriter(W: type) type {
-    const PosiPrinter = @import("cursor").PosiPrinter;
-
-    return struct {
-        a: Attribute,
-        w: W,
-
-        const Self = @This();
-
-        pub fn new(attr: Attribute, writer: W) Self {
-            return .{ .a = attr, .w = writer };
-        }
-
-        pub fn print(self: Self, comptime fmt: []const u8, args: anytype) W.Error!void {
-            try self.a.fprint(self.w, fmt, args);
-        }
-        pub fn posiPrint(self: Self) PosiPrinter(Self) {
-            return .new(self);
         }
     };
 }

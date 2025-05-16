@@ -33,14 +33,16 @@ pub fn getStd() Self {
 pub fn print(self: Self, comptime fmt: []const u8, args: anytype) Error!void {
     try self.w.print(fmt, args);
 }
-pub fn posiPrint(self: Self) cursor.PosiPrinter(Self) {
-    return .new(self);
+pub fn mvprint(self: Self, mv: cursor.Point, comptime fmt: []const u8, args: anytype) Error!void {
+    try cursor.cursor(self.w).move(mv);
+    try self.w.print(fmt, args);
 }
-pub fn getAttror(self: Self, attribute: attr.Attribute) attr.AttrWriter(W) {
-    return .new(attribute, self.w);
+pub fn aprint(self: Self, a: attr.Attribute, comptime fmt: []const u8, args: anytype) Error!void {
+    try a.fprint(self.w, fmt, args);
 }
-pub fn getCursor(self: Self) cursor.CursorWriter(W) {
-    return .new(self.w);
+pub fn mvaprint(self: Self, mv: cursor.Point, a: attr.Attribute, comptime fmt: []const u8, args: anytype) Error!void {
+    try cursor.cursor(self.w).move(mv);
+    try a.fprint(self.w, fmt, args);
 }
 
 pub fn insertBlank(self: Self, u: anytype) Error!void {
