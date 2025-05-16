@@ -14,7 +14,7 @@ const Arg = zargs.Arg;
 const Self = @This();
 
 const UNIT_FMT = " {s} ";
-const HEADER = Vec2{ 6, 1 };
+const HEADER = Vec2{ 7, 1 };
 
 msg: []const u8,
 unit_delay_ms: ?u64 = null,
