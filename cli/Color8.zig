@@ -14,7 +14,7 @@ const Arg = zargs.Arg;
 const Self = @This();
 
 const UNIT_FMT = " {s} ";
-const HEADER = Vec2{ 6, 1 };
+const HEADER = Vec2{ 7, 1 };
 
 msg: []const u8,
 unit_delay_ms: ?u64 = null,
@@ -37,19 +37,17 @@ fn unit(self: Self, p: Vec2, attr: Attribute) !void {
         std.time.sleep(std.time.ns_per_ms * ms);
     }
     const point = self.tbl_origin + (scaleVec2(p, self.unit_sz) orelse unreachable);
-    try term.getAttror(attr).posiPrint()
-        .at(point, Self.UNIT_FMT, .{self.msg});
-    try term.getAttror(attr.bold()).posiPrint()
-        .at(point + Vec2{ 0, 1 }, Self.UNIT_FMT, .{self.msg});
+    try term.mvaprint(.at(point), attr, Self.UNIT_FMT, .{self.msg});
+    try term.mvaprint(.at(point + Vec2{ 0, 1 }), attr.bold(), Self.UNIT_FMT, .{self.msg});
 }
 fn gYm(self: Self) !void {
-    const cursor = term.getCursor();
+    const cursor = Term.cursor.cursor(term.w);
 
     try term.eraseDisplay(.whole);
 
     var row: i32 = 0;
     while (row <= 8) : (row += 1) {
-        var attr = Attribute.new();
+        var attr = Attribute.new().strict();
         if (row != 0) {
             attr = attr.color8(@enumFromInt(row - 1));
         }
@@ -64,12 +62,12 @@ fn gYm(self: Self) !void {
             std.time.sleep(std.time.ns_per_ms * ms);
         }
     }
-    try term.getAttror(.reset).print("", .{});
+    try term.aprint(.default, "", .{});
 
     var col: i32 = 1;
     while (col <= 8) : (col += 1) {
-        try term.posiPrint().at(
-            castVec2(self.tbl_origin[0] + col * self.unit_sz[0], self.origin[1]),
+        try term.mvprint(
+            .at(castVec2(self.tbl_origin[0] + col * self.unit_sz[0], self.origin[1])),
             " 4{d}m ",
             .{col - 1},
         );
@@ -79,7 +77,7 @@ fn gYm(self: Self) !void {
     while (row <= 8) : (row += 1) {
         var buffer: [16]u8 = undefined;
         var ptr: []const u8 = &buffer;
-        var attr = Attribute.new().trust();
+        var attr = Attribute.new();
         if (row != 0) {
             attr = attr.color8(@enumFromInt(row - 1));
         }
@@ -88,21 +86,21 @@ fn gYm(self: Self) !void {
             self.tbl_origin[1] + row * self.unit_sz[1],
         };
         ptr = try std.fmt.bufPrint(&buffer, "{}", .{attr});
-        try term.posiPrint().at(
-            point,
+        try term.mvprint(
+            .at(point),
             "{s:5} ",
             .{if (std.mem.startsWith(u8, ptr, "\x1b[")) ptr[2..] else ptr},
         );
         ptr = try std.fmt.bufPrint(&buffer, "{}", .{attr.bold()});
-        try term.posiPrint().at(
-            point + Vec2{ 1, 0 },
+        try term.mvprint(
+            .at(point + Vec2{ 1, 0 }),
             "{s:5} ",
             .{if (std.mem.startsWith(u8, ptr, "\x1b[")) ptr[2..] else ptr},
         );
     }
 
-    try cursor.rowAt(self.tbl_origin[1] + 8 * self.unit_sz[1] + 2);
-    try cursor.downBegin(2);
+    try cursor.row(.at(self.tbl_origin[1] + 8 * self.unit_sz[1] + 2));
+    try cursor.beginRow(.down(2));
 }
 
 const _cmd = Command.new("color-test").alias("gYm").alias("gym")

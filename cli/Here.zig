@@ -24,7 +24,7 @@ fn cb(args: *_cmd.Result()) void {
     const winsz = term.windowSize() catch |e| zargs.exit(e, 1);
     std.debug.print("window size: {}\n", .{winsz});
     if (args.at) |at| {
-        term.posiPrint().at(at, "{s}", .{args.message}) catch |e| zargs.exit(e, 1);
+        term.mvprint(.at(at), "{s}", .{args.message}) catch |e| zargs.exit(e, 1);
     } else {
         term.print("{s}", .{args.message}) catch |e| zargs.exit(e, 1);
     }

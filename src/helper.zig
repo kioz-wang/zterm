@@ -74,3 +74,30 @@ pub fn castU(u: anytype) u32 {
 pub fn castI(i: anytype) i32 {
     return cast(i32, i);
 }
+
+pub fn Stringify(V: type) type {
+    return struct {
+        v: V,
+        const Self = @This();
+        pub fn count(self: Self) usize {
+            var writer = std.io.countingWriter(std.io.null_writer);
+            @setEvalBranchQuota(100000); // TODO why?
+            self.v.stringify(writer.writer()) catch unreachable;
+            return writer.bytes_written;
+        }
+        pub inline fn literal(self: Self) *const [self.count():0]u8 {
+            comptime {
+                var buf: [self.count():0]u8 = undefined;
+                var fbs = std.io.fixedBufferStream(&buf);
+                @setEvalBranchQuota(100000); // TODO why?
+                self.v.stringify(fbs.writer()) catch unreachable;
+                buf[buf.len] = 0;
+                const final = buf;
+                return &final;
+            }
+        }
+    };
+}
+pub fn stringify(v: anytype) Stringify(@TypeOf(v)) {
+    return .{ .v = v };
+}
