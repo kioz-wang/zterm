@@ -1,7 +1,9 @@
 const std = @import("std");
-const alias = @import("helper").alias;
-const formatter = @import("helper").formatter;
-const Flag = @import("helper").env.Flag;
+const helper = @import("helper");
+const alias = helper.alias;
+const formatter = helper.formatter;
+const Flag = helper.env.Flag;
+const Stringify = helper.Stringify;
 
 const print = alias.print;
 const String = alias.String;
@@ -17,26 +19,6 @@ const SGR = @import("mapping").par.SGR;
 const Color8 = SGR.Color.Color8;
 const Color256 = SGR.Color.ColorX.Color256;
 const ColorRGB = SGR.Color.ColorX.ColorRGB;
-
-const literalize = struct {
-    fn count(attr: anytype) usize {
-        var writer = std.io.countingWriter(std.io.null_writer);
-        @setEvalBranchQuota(100000); // TODO why?
-        attr.stringify(writer.writer(), true, attr.flag_strict) catch unreachable;
-        return writer.bytes_written;
-    }
-    inline fn cast(attr: anytype) *const [count(attr):0]u8 {
-        comptime {
-            var buf: [count(attr):0]u8 = undefined;
-            var fbs = std.io.fixedBufferStream(&buf);
-            @setEvalBranchQuota(100000); // TODO why?
-            attr.stringify(fbs.writer(), true, attr.flag_strict) catch unreachable;
-            buf[buf.len] = 0;
-            const final = buf;
-            return &final;
-        }
-    }
-};
 
 pub const Style = struct {
     const Self = @This();
@@ -80,14 +62,17 @@ pub const Style = struct {
     }
 
     pub fn fprint(self: Self, w: anytype, comptime fmt: []const u8, args: anytype) @TypeOf(w).Error!void {
-        try self.stringifyEnv(w, true);
+        try self.stringifyEnv(w);
         try std.fmt.format(w, fmt, args);
     }
     pub fn format(self: Self, comptime _: []const u8, _: FormatOptions, w: anytype) @TypeOf(w).Error!void {
-        try self.stringifyEnv(w, true);
+        try self.stringifyEnv(w);
     }
-    pub fn toString(self: Self) *const [literalize.count(self):0]u8 {
-        return literalize.cast(self);
+    pub fn stringify(self: Self, w: anytype) @TypeOf(w).Error!void {
+        try self.stringifyCSI(w, true);
+    }
+    pub fn toString(self: Self) *const [helper.stringify(self).count():0]u8 {
+        return helper.stringify(self).literal();
     }
     pub fn value(self: Self, v: anytype) Value(Self, @TypeOf(v)) {
         return .new(self, v);
@@ -147,9 +132,9 @@ pub const Style = struct {
         unreachable;
     }
 
-    fn stringify(self: Self, w: anytype, csi: bool, _strict: bool) @TypeOf(w).Error!void {
+    fn stringifyCSI(self: Self, w: anytype, csi: bool) @TypeOf(w).Error!void {
         var first = true;
-        if (_strict) {
+        if (self.flag_strict) {
             if (csi) try formatAny(ctl.ESCSequence.CSI, w);
             try formatInt(SGR.reset, w);
             first = false;
@@ -164,9 +149,9 @@ pub const Style = struct {
         }
         if (csi and !first) try formatAny(ctl.CSISequenceFunction.SGR, w);
     }
-    fn stringifyEnv(self: Self, w: anytype, csi: bool) @TypeOf(w).Error!void {
+    fn stringifyEnv(self: Self, w: anytype) @TypeOf(w).Error!void {
         if (self.flag_force_no orelse Flag("NO_STYLE").check()) return;
-        try self.stringify(w, csi, self.flag_strict);
+        try self.stringify(w);
     }
 };
 
@@ -240,14 +225,17 @@ pub const Color = struct {
     }
 
     pub fn fprint(self: Self, w: anytype, comptime fmt: []const u8, args: anytype) @TypeOf(w).Error!void {
-        try self.stringifyEnv(w, true);
+        try self.stringifyEnv(w);
         try std.fmt.format(w, fmt, args);
     }
     pub fn format(self: Self, comptime _: []const u8, _: FormatOptions, w: anytype) @TypeOf(w).Error!void {
-        try self.stringifyEnv(w, true);
+        try self.stringifyEnv(w);
     }
-    pub fn toString(self: Self) *const [literalize.count(self):0]u8 {
-        return literalize.cast(self);
+    pub fn stringify(self: Self, w: anytype) @TypeOf(w).Error!void {
+        try self.stringifyCSI(w, true);
+    }
+    pub fn toString(self: Self) *const [helper.stringify(self).count():0]u8 {
+        return helper.stringify(self).literal();
     }
     pub fn value(self: Self, v: anytype) Value(Self, @TypeOf(v)) {
         return .new(self, v);
@@ -296,9 +284,9 @@ pub const Color = struct {
         }
     };
 
-    fn stringify(self: Self, w: anytype, csi: bool, _strict: bool) @TypeOf(w).Error!void {
+    fn stringifyCSI(self: Self, w: anytype, csi: bool) @TypeOf(w).Error!void {
         if (csi) try formatAny(ctl.ESCSequence.CSI, w);
-        if (_strict) {
+        if (self.flag_strict) {
             try formatInt(SGR.reset, w);
             try w.writeByte(sep);
         }
@@ -323,9 +311,9 @@ pub const Color = struct {
         }
         if (csi) try formatAny(ctl.CSISequenceFunction.SGR, w);
     }
-    fn stringifyEnv(self: Self, w: anytype, csi: bool) @TypeOf(w).Error!void {
+    fn stringifyEnv(self: Self, w: anytype) @TypeOf(w).Error!void {
         if (self.flag_force_no orelse Flag("NO_COLOR").check()) return;
-        try self.stringify(w, csi, self.flag_strict);
+        try self.stringify(w);
     }
 };
 
@@ -376,14 +364,17 @@ pub const Attribute = struct {
     }
 
     pub fn fprint(self: Self, w: anytype, comptime fmt: []const u8, args: anytype) @TypeOf(w).Error!void {
-        try self.stringifyEnv(w, true);
+        try self.stringifyEnv(w);
         try std.fmt.format(w, fmt, args);
     }
     pub fn format(self: Self, comptime _: []const u8, _: FormatOptions, w: anytype) @TypeOf(w).Error!void {
-        try self.stringifyEnv(w, true);
+        try self.stringifyEnv(w);
     }
-    pub fn toString(self: Self) *const [literalize.count(self):0]u8 {
-        return literalize.cast(self);
+    pub fn stringify(self: Self, w: anytype) @TypeOf(w).Error!void {
+        try self.stringifyCSI(w, true);
+    }
+    pub fn toString(self: Self) *const [helper.stringify(self).count():0]u8 {
+        return helper.stringify(self).literal();
     }
     pub fn value(self: Self, v: anytype) Value(Self, @TypeOf(v)) {
         return .new(self, v);
@@ -583,9 +574,9 @@ pub const Attribute = struct {
         return self.color8(c);
     }
 
-    fn stringify(self: Self, w: anytype, csi: bool, _strict: bool) @TypeOf(w).Error!void {
+    fn stringifyCSI(self: Self, w: anytype, csi: bool) @TypeOf(w).Error!void {
         var first = true;
-        if (_strict) {
+        if (self.flag_strict) {
             if (csi) try formatAny(ctl.ESCSequence.CSI, w);
             try formatInt(SGR.reset, w);
             first = false;
@@ -594,13 +585,15 @@ pub const Attribute = struct {
             if (@field(self.storage, field.name)) |v| {
                 if (csi and first) try formatAny(ctl.ESCSequence.CSI, w);
                 if (!first) try w.writeByte(sep);
-                try v.stringify(w, false, false);
+                var relaxed = v;
+                relaxed.flag_strict = false;
+                try relaxed.stringifyCSI(w, false);
                 first = false;
             }
         }
         if (csi and !first) try formatAny(ctl.CSISequenceFunction.SGR, w);
     }
-    fn stringifyEnv(self: Self, w: anytype, csi: bool) @TypeOf(w).Error!void {
+    fn stringifyEnv(self: Self, w: anytype) @TypeOf(w).Error!void {
         if (self.flag_force_no_color orelse Flag("NO_COLOR").check() and
             self.flag_force_no_style orelse Flag("NO_STYLE").check())
             return;
@@ -612,7 +605,7 @@ pub const Attribute = struct {
         if (self.flag_force_no_style orelse Flag("NO_STYLE").check()) {
             obj.storage.style = null;
         }
-        try obj.stringify(w, csi, self.flag_strict);
+        try obj.stringify(w);
     }
 };
 
@@ -627,7 +620,7 @@ pub fn Value(A: type, V: type) type {
         }
 
         pub fn format(self: Self, comptime fmt: []const u8, options: FormatOptions, w: anytype) @TypeOf(w).Error!void {
-            try self.a.stringifyEnv(w, true);
+            try self.a.stringifyEnv(w);
             try std.fmt.formatType(self.v, fmt, options, w, std.fmt.default_max_depth);
             var default = Attribute.default;
             default.flag_force_no_color, default.flag_force_no_style =
@@ -635,7 +628,7 @@ pub fn Value(A: type, V: type) type {
                     .{ self.a.flag_force_no, self.a.flag_force_no }
                 else
                     .{ self.a.flag_force_no_color, self.a.flag_force_no_style };
-            try default.stringifyEnv(w, true);
+            try default.stringifyEnv(w);
         }
     };
 }
