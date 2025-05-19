@@ -9,13 +9,13 @@ A Zig implementation of [console_codes (4)](https://www.man7.org/linux/man-pages
 - No memory allocator needed
 - Generate attributes containing multiple styles (e.g. bold, italic) and colors (including foreground/background)
   - Comptime constructor
-  - Wrap any value as format `args`
-  - Wray any writer then use its `print` method
+  - Use `.value(v)` to wrap any value for formatting, enforcing strict attribute handling (applied before output and reset after)
+  - Use `.fprint(writer, fmt, args)` to incrementally apply an attribute before output
 - Move cursor to/at a position
 - Get the position of current cursor
 - Support [`NO_COLOR`](https://no-color.org/) (also, support `NO_STYLE`!)
-  - Check environments at runtime when formatting the attribute
-  - Force to format raw attribute by `raw` method
+  - Check environments at runtime
+  - Get literal string (ignore environments, comptime) by `toString()`
 - Get window size
 
 ### Plans
@@ -24,7 +24,6 @@ A Zig implementation of [console_codes (4)](https://www.man7.org/linux/man-pages
 
 - [ ] Cross-platform: windows, macos
 - [ ] Read the key, text, password and etc
-- [ ] Enhance output APIs
 
 ### APIs
 
