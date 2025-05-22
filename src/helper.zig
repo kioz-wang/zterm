@@ -52,14 +52,17 @@ pub const env = struct {
         defer allocator.free(value);
         return value.len != 0;
     }
-    /// cache flag
-    pub fn Flag(key: String) type {
+    pub fn Flag(key: anytype) type {
+        std.debug.assert(@typeInfo(@TypeOf(key)) == .enum_literal);
         return struct {
             var value: ?bool = null;
             pub fn check() bool {
                 if (value == null)
-                    value = flag(key);
+                    value = flag(@tagName(key));
                 return value.?;
+            }
+            pub fn force(b: bool) void {
+                value = b;
             }
         };
     }

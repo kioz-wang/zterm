@@ -20,6 +20,13 @@ const Color8 = SGR.Color.Color8;
 const Color256 = SGR.Color.ColorX.Color256;
 const ColorRGB = SGR.Color.ColorX.ColorRGB;
 
+pub fn forceNoColor(b: bool) void {
+    Flag(.NO_COLOR).force(b);
+}
+pub fn forceNoStyle(b: bool) void {
+    Flag(.NO_STYLE).force(b);
+}
+
 pub const Style = struct {
     const Self = @This();
     const Storage = packed struct {
@@ -38,7 +45,6 @@ pub const Style = struct {
     };
     storage: Storage,
     flag_strict: bool = false,
-    flag_force_no: ?bool = null,
 
     pub fn new() Self {
         return std.mem.zeroes(Self);
@@ -53,11 +59,6 @@ pub const Style = struct {
     pub fn strict(self: Self) Self {
         var obj = self;
         obj.flag_strict = true;
-        return obj;
-    }
-    pub fn force(self: Self, b: bool) Self {
-        var obj = self;
-        obj.flag_force_no = !b;
         return obj;
     }
 
@@ -104,13 +105,14 @@ pub const Style = struct {
         test "Style Value" {
             const sprint = alias.sprint;
             var buffer: [32]u8 = undefined;
+            forceNoStyle(false);
             try testing.expectEqualStrings(
                 "\x1b[0;1mhello\x1b[0m",
-                try sprint(&buffer, "{s}", .{new().set(.bold).force(true).value("hello")}),
+                try sprint(&buffer, "{s}", .{new().set(.bold).value("hello")}),
             );
             try testing.expectEqualStrings(
                 "\x1b[0;1mcc\x1b[0m",
-                try sprint(&buffer, "{x}", .{new().set(.bold).force(true).value(@as(u16, 0xcc))}),
+                try sprint(&buffer, "{x}", .{new().set(.bold).value(@as(u16, 0xcc))}),
             );
         }
     };
@@ -150,7 +152,7 @@ pub const Style = struct {
         if (csi and !first) try formatAny(ctl.CSISequenceFunction.SGR, w);
     }
     fn stringifyEnv(self: Self, w: anytype) @TypeOf(w).Error!void {
-        if (self.flag_force_no orelse Flag("NO_STYLE").check()) return;
+        if (Flag(.NO_STYLE).check()) return;
         try self.stringify(w);
     }
 };
@@ -168,7 +170,6 @@ pub const Color = struct {
     flag_bright: bool = false,
     flag_bg: bool = false,
     flag_strict: bool = false,
-    flag_force_no: ?bool = null,
 
     /// set default color (before Linux 3.16: set underscore off, set default color)
     pub const default: Self = .{ .storage = .default };
@@ -195,11 +196,6 @@ pub const Color = struct {
     pub fn strict(self: Self) Self {
         var obj = self;
         obj.flag_strict = true;
-        return obj;
-    }
-    pub fn force(self: Self, b: bool) Self {
-        var obj = self;
-        obj.flag_force_no = !b;
         return obj;
     }
 
@@ -269,17 +265,18 @@ pub const Color = struct {
         test "Color Value" {
             const sprint = alias.sprint;
             var buffer: [32]u8 = undefined;
+            forceNoColor(false);
             try testing.expectEqualStrings(
                 "\x1b[0;38;2;1;2;3mhello\x1b[0m",
                 try sprint(
                     &buffer,
                     "{s}",
-                    .{(colorHexS("#010203") catch unreachable).force(true).value("hello")},
+                    .{(colorHexS("#010203") catch unreachable).value("hello")},
                 ),
             );
             try testing.expectEqualStrings(
                 "\x1b[0;94mcc\x1b[0m",
-                try sprint(&buffer, "{x}", .{color8(.blue, true).force(true).value(@as(u16, 0xcc))}),
+                try sprint(&buffer, "{x}", .{color8(.blue, true).value(@as(u16, 0xcc))}),
             );
         }
     };
@@ -312,7 +309,7 @@ pub const Color = struct {
         if (csi) try formatAny(ctl.CSISequenceFunction.SGR, w);
     }
     fn stringifyEnv(self: Self, w: anytype) @TypeOf(w).Error!void {
-        if (self.flag_force_no orelse Flag("NO_COLOR").check()) return;
+        if (Flag(.NO_COLOR).check()) return;
         try self.stringify(w);
     }
 };
@@ -326,8 +323,6 @@ pub const Attribute = struct {
     };
     storage: Storage,
     flag_strict: bool = false,
-    flag_force_no_color: ?bool = null,
-    flag_force_no_style: ?bool = null,
 
     pub fn new() Self {
         return .{ .storage = .{} };
@@ -339,16 +334,6 @@ pub const Attribute = struct {
         return obj;
     }
     pub const default = new().strict();
-    pub fn force_color(self: Self, b: bool) Self {
-        var obj = self;
-        obj.flag_force_no_color = !b;
-        return obj;
-    }
-    pub fn force_style(self: Self, b: bool) Self {
-        var obj = self;
-        obj.flag_force_no_style = !b;
-        return obj;
-    }
 
     pub fn style(self: Self, v: Style) Self {
         return if (v.storage != Style.new().storage)
@@ -521,17 +506,20 @@ pub const Attribute = struct {
                 const sprint = alias.sprint;
                 var buffer0: [32]u8 = undefined;
                 var buffer1: [32]u8 = undefined;
+                forceNoColor(false);
+                forceNoStyle(true);
                 try testing.expectEqualStrings(
-                    try sprint(&buffer0, "{}", .{new().colorRGB(1, 2, 3).bold().force_style(false).force_color(true)}),
-                    try sprint(&buffer1, "{}", .{new().colorRGB(1, 2, 3).italic().force_style(false).force_color(true)}),
+                    try sprint(&buffer0, "{}", .{new().colorRGB(1, 2, 3).bold()}),
+                    try sprint(&buffer1, "{}", .{new().colorRGB(1, 2, 3).italic()}),
                 );
             }
         }
         test "Attribute Value" {
             const sprint = alias.sprint;
-            const attr = Attribute.new().force_style(true).force_color(true)
-                .bold().green().bgColor8(.white).underline();
+            const attr = Attribute.new().bold().green().bgColor8(.white).underline();
             var buffer: [32]u8 = undefined;
+            forceNoColor(false);
+            forceNoStyle(false);
             try testing.expectEqualStrings(
                 "\x1b[0;1;21;32;47mhello\x1b[0m",
                 try sprint(&buffer, "{s}", .{attr.value("hello")}),
@@ -546,9 +534,10 @@ pub const Attribute = struct {
             );
         }
         test "Attribute Writer" {
-            const attr = Attribute.new().force_style(true).force_color(true)
-                .bold().green().bgColor8(.white).underline();
+            const attr = Attribute.new().bold().green().bgColor8(.white).underline();
             var buffer = std.mem.zeroes([512]u8);
+            forceNoColor(false);
+            forceNoStyle(false);
             var bs = std.io.fixedBufferStream(&buffer);
             try attr.fprint(bs.writer(), "string {s} int {d}", .{ "hello", 6 });
             try testing.expectEqualStrings(
@@ -594,15 +583,14 @@ pub const Attribute = struct {
         if (csi and !first) try formatAny(ctl.CSISequenceFunction.SGR, w);
     }
     fn stringifyEnv(self: Self, w: anytype) @TypeOf(w).Error!void {
-        if (self.flag_force_no_color orelse Flag("NO_COLOR").check() and
-            self.flag_force_no_style orelse Flag("NO_STYLE").check())
+        if (Flag(.NO_COLOR).check() and Flag(.NO_STYLE).check())
             return;
         var obj = self;
-        if (self.flag_force_no_color orelse Flag("NO_COLOR").check()) {
+        if (Flag(.NO_COLOR).check()) {
             obj.storage.color = null;
             obj.storage.bgColor = null;
         }
-        if (self.flag_force_no_style orelse Flag("NO_STYLE").check()) {
+        if (Flag(.NO_STYLE).check()) {
             obj.storage.style = null;
         }
         try obj.stringify(w);
@@ -622,13 +610,7 @@ pub fn Value(A: type, V: type) type {
         pub fn format(self: Self, comptime fmt: []const u8, options: FormatOptions, w: anytype) @TypeOf(w).Error!void {
             try self.a.stringifyEnv(w);
             try std.fmt.formatType(self.v, fmt, options, w, std.fmt.default_max_depth);
-            var default = Attribute.default;
-            default.flag_force_no_color, default.flag_force_no_style =
-                if (@hasField(A, "flag_force_no"))
-                    .{ self.a.flag_force_no, self.a.flag_force_no }
-                else
-                    .{ self.a.flag_force_no_color, self.a.flag_force_no_style };
-            try default.stringifyEnv(w);
+            try Attribute.default.stringifyEnv(w);
         }
     };
 }
