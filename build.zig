@@ -45,10 +45,18 @@ pub fn build(b: *std.Build) void {
     mod_term.addImport("cursor", mod_cursor);
 
     const test_step = b.step("test", "Run unit tests");
+    const test_filters: []const []const u8 = b.option(
+        []const []const u8,
+        "test_filter",
+        "Skip tests that do not match any of the specified filters",
+    ) orelse &.{};
     const mods_utest = [_]*std.Build.Module{ mod_helper, mod_attr, mod_mapping, mod_cursor };
     for (mods_utest) |unit| {
         const utest = b.addRunArtifact(
-            b.addTest(.{ .root_module = unit }),
+            b.addTest(.{
+                .root_module = unit,
+                .filters = test_filters,
+            }),
         );
         utest.skip_foreign_checks = true;
         test_step.dependOn(&utest.step);

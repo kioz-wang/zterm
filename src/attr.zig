@@ -61,6 +61,8 @@ pub const Style = struct {
         obj.flag_strict = true;
         return obj;
     }
+    pub const default = new();
+    pub const none = default;
 
     pub fn fprint(self: Self, w: anytype, comptime fmt: []const u8, args: anytype) @TypeOf(w).Error!void {
         try self.stringifyEnv(w);
@@ -171,8 +173,6 @@ pub const Color = struct {
     flag_bg: bool = false,
     flag_strict: bool = false,
 
-    /// set default color (before Linux 3.16: set underscore off, set default color)
-    pub const default: Self = .{ .storage = .default };
     pub fn color8(color: Color8, bright: bool) Self {
         return .{ .storage = .{ .color8 = color }, .flag_bright = bright };
     }
@@ -198,6 +198,8 @@ pub const Color = struct {
         obj.flag_strict = true;
         return obj;
     }
+    /// set default color (before Linux 3.16: set underscore off, set default color)
+    pub const default: Self = .{ .storage = .default };
 
     pub fn colorIBGR(c: Color256.IBGR) Self {
         return color256(@intFromEnum(c));
@@ -333,7 +335,13 @@ pub const Attribute = struct {
         obj.flag_strict = true;
         return obj;
     }
-    pub const default = new().strict();
+    pub const default = Self{ .storage = .{
+        .style = .default,
+        .color = Color.default.fg(),
+        .bgColor = Color.default.bg(),
+    } };
+    pub const none = new();
+    pub const reset = new().strict();
 
     pub fn style(self: Self, v: Style) Self {
         return if (v.storage != Style.new().storage)
@@ -610,7 +618,7 @@ pub fn Value(A: type, V: type) type {
         pub fn format(self: Self, comptime fmt: []const u8, options: FormatOptions, w: anytype) @TypeOf(w).Error!void {
             try self.a.stringifyEnv(w);
             try std.fmt.formatType(self.v, fmt, options, w, std.fmt.default_max_depth);
-            try Attribute.default.stringifyEnv(w);
+            try Attribute.reset.stringifyEnv(w);
         }
     };
 }

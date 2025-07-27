@@ -1,6 +1,6 @@
 .{
     .name = .zterm,
-    .version = "0.14.3",
+    .version = "0.14.4",
     .fingerprint = 0xf10b37e2675fe36e,
     .minimum_zig_version = "0.14.0",
 
