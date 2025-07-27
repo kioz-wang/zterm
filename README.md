@@ -49,10 +49,11 @@ zig fetch --save https://github.com/kioz-wang/zterm/archive/refs/tags/v0.14.1.ta
 
 > See https://github.com/kioz-wang/zterm/releases
 
-The version number follows the format `vx.y.z`:
+The version number follows the format `vx.y.z[-alpha.n]`:
 - **x**: Currently fixed at 0. It will increment to 1 when the project stabilizes. Afterward, it will increment by 1 for any breaking changes.
 - **y**: Represents the supported Zig version. For example, `vx.14.z` supports [Zig 0.14.0](https://github.com/ziglang/zig/releases/tag/0.14.0).
-- **z**: Iteration version, where even numbers indicate releases with new features or significant changes (see [milestones](https://github.com/kioz-wang/zterm/milestones)), and odd numbers indicate releases with fixes or minor changes.
+- **z**: Iteration version, indicating releases with new features or significant changes (see [milestones](https://github.com/kioz-wang/zterm/milestones)).
+- **n**: Minor version, indicating releases with fixes or minor updates.
 
 ### import
 
@@ -96,7 +97,7 @@ See builtin demo: `zig build run -- -h`
 
 More real-world examples are coming!
 
-- emmm...
+- [zargs's Style Config](https://github.com/kioz-wang/zargs/blob/master/src/command/Config.zig)
 
 ## License
 
