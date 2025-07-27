@@ -1,7 +1,6 @@
 const std = @import("std");
 
 const Term = @import("Term");
-const term = Term.getStd();
 const Attribute = Term.attr.Attribute;
 const castVec2 = Term.cursor.castVec2;
 const scaleVec2 = Term.cursor.scaleVec2;
@@ -22,12 +21,14 @@ line_delay_ms: ?u64 = null,
 unit_sz: Vec2,
 origin: Vec2,
 tbl_origin: Vec2 = undefined,
+term: Term = undefined,
 
 fn new(msg: []const u8, _origin: Vec2) Self {
     var self: Self = .{
         .msg = msg,
         .unit_sz = castVec2(msg.len + 4, 2),
         .origin = _origin,
+        .term = Term.getStd(),
     };
     self.tbl_origin = self.origin + Self.HEADER;
     return self;
@@ -37,13 +38,13 @@ fn unit(self: Self, p: Vec2, attr: Attribute) !void {
         std.time.sleep(std.time.ns_per_ms * ms);
     }
     const point = self.tbl_origin + (scaleVec2(p, self.unit_sz) orelse unreachable);
-    try term.mvaprint(.at(point), attr, Self.UNIT_FMT, .{self.msg});
-    try term.mvaprint(.at(point + Vec2{ 0, 1 }), attr.bold(), Self.UNIT_FMT, .{self.msg});
+    try self.term.mvaprint(.at(point), attr, Self.UNIT_FMT, .{self.msg});
+    try self.term.mvaprint(.at(point + Vec2{ 0, 1 }), attr.bold(), Self.UNIT_FMT, .{self.msg});
 }
 fn gYm(self: Self) !void {
-    const cursor = Term.cursor.cursor(term.w);
+    const cursor = Term.cursor.cursor(self.term.w);
 
-    try term.eraseDisplay(.whole);
+    try self.term.eraseDisplay(.whole);
 
     var row: i32 = 0;
     while (row <= 8) : (row += 1) {
@@ -62,11 +63,11 @@ fn gYm(self: Self) !void {
             std.time.sleep(std.time.ns_per_ms * ms);
         }
     }
-    try term.aprint(.default, "", .{});
+    try self.term.aprint(.default, "", .{});
 
     var col: i32 = 1;
     while (col <= 8) : (col += 1) {
-        try term.mvprint(
+        try self.term.mvprint(
             .at(castVec2(self.tbl_origin[0] + col * self.unit_sz[0], self.origin[1])),
             " 4{d}m ",
             .{col - 1},
@@ -86,13 +87,13 @@ fn gYm(self: Self) !void {
             self.tbl_origin[1] + row * self.unit_sz[1],
         };
         ptr = try std.fmt.bufPrint(&buffer, "{}", .{attr});
-        try term.mvprint(
+        try self.term.mvprint(
             .at(point),
             "{s:5} ",
             .{if (std.mem.startsWith(u8, ptr, "\x1b[")) ptr[2..] else ptr},
         );
         ptr = try std.fmt.bufPrint(&buffer, "{}", .{attr.bold()});
-        try term.mvprint(
+        try self.term.mvprint(
             .at(point + Vec2{ 1, 0 }),
             "{s:5} ",
             .{if (std.mem.startsWith(u8, ptr, "\x1b[")) ptr[2..] else ptr},
