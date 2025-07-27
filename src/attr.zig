@@ -147,6 +147,7 @@ pub const Style = struct {
             if (self.field_get(field.name)) {
                 if (csi and first) try formatAny(ctl.ESCSequence.CSI, w);
                 if (!first) try w.writeByte(sep);
+                @setEvalBranchQuota(100000);
                 try formatter.dEnum(std.meta.stringToEnum(SGR.Style, field.name).?, w);
                 first = false;
             }
@@ -567,6 +568,7 @@ pub const Attribute = struct {
         return obj;
     }
     fn field_color8_set(self: Self, comptime name: LiteralString) Self {
+        @setEvalBranchQuota(100000);
         const c = std.meta.stringToEnum(SGR.Color.Color8, name).?;
         return self.color8(c);
     }
