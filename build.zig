@@ -80,7 +80,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     exe_mod.addImport("Term", mod_term);
-    exe_mod.addImport("zargs", b.lazyDependency("zargs", .{}).?.module("zargs"));
+    exe_mod.addImport("zargs", b.dependency("zargs", .{}).module("zargs"));
 
     const exe = b.addExecutable(.{
         .name = "zterm_cli",
