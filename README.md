@@ -2,7 +2,7 @@
 
 A Zig implementation of [console_codes (4)](https://www.man7.org/linux/man-pages/man4/console_codes.4.html).
 
-![asciicast](.asset/zterm_cli.gif)
+<img src=".asset/color-test.png" alt="color-test" width="600"/>
 
 ## Features
 
@@ -98,6 +98,7 @@ See builtin demo: `zig build run -- -h`
 More real-world examples are coming!
 
 - [zargs's Style Config](https://github.com/kioz-wang/zargs/blob/master/src/command/Config.zig)
+- [zterm_cli](https://github.com/kioz-wang/zterm_cli): Demos of this project
 
 ## License
 
