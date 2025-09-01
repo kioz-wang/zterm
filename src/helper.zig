@@ -10,54 +10,6 @@ pub const alias = struct {
 
 const String = alias.String;
 
-pub const formatter = struct {
-    const assert = std.debug.assert;
-    pub fn any(v: anytype, writer: *std.io.Writer) std.io.Writer.Error!void {
-        const actual_fmt = switch (@typeInfo(@TypeOf(v))) {
-            .array, .vector, .optional, .error_union => "any",
-            .pointer => |ptr_info| switch (ptr_info.size) {
-                .one => switch (@typeInfo(ptr_info.child)) {
-                    .array => "any",
-                    else => "",
-                },
-                .many, .c => "*",
-                .slice => "any",
-            },
-            else => "",
-        };
-        if (comptime std.mem.eql(u8, actual_fmt, "*")) {
-            return writer.printAddress(v, .{});
-        }
-        if (std.meta.hasMethod(@TypeOf(v), "format")) {
-            return try v.format(writer);
-        }
-        return writer.printValue(actual_fmt, .{}, v, std.fmt.default_max_depth);
-    }
-    pub fn dInt(v: anytype, writer: *std.io.Writer) std.io.Writer.Error!void {
-        assert(@typeInfo(@TypeOf(v)) == .int);
-        return writer.printIntAny(v, 10, .lower, .{});
-    }
-    pub fn dEnum(v: anytype, writer: *std.io.Writer) std.io.Writer.Error!void {
-        assert(@typeInfo(@TypeOf(v)) == .@"enum");
-        return dInt(@intFromEnum(v), writer);
-    }
-    pub fn cEnum(v: anytype, writer: *std.io.Writer) std.io.Writer.Error!void {
-        assert(@typeInfo(@TypeOf(v)) == .@"enum");
-        return writer.printAsciiChar(@intFromEnum(v), .{});
-    }
-    pub fn Raw(T: type) type {
-        return struct {
-            v: T,
-            pub fn format(self: @This(), comptime fmt: []const u8, options: alias.FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
-                try self.v.rawFormat(fmt, options, writer);
-            }
-        };
-    }
-    pub fn raw(v: anytype) Raw(@TypeOf(v)) {
-        return .{ .v = v };
-    }
-};
-
 pub const env = struct {
     pub fn flag(key: String) bool {
         const GetEnvVarOwnedError = std.process.GetEnvVarOwnedError;

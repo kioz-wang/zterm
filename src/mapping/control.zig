@@ -1,7 +1,6 @@
 const std = @import("std");
 const alias = @import("helper").alias;
 const FormatOptions = alias.FormatOptions;
-const formatter = @import("helper").formatter;
 
 pub const ControlCharater = enum(u8) {
     const Self = @This();
@@ -78,8 +77,8 @@ pub const ESCSequence = enum(u8) {
     CSI = '[',
 
     pub fn format(self: ESCSequence, writer: *std.Io.Writer) std.Io.Writer.Error!void {
-        try formatter.any(ControlCharater.ESC, writer);
-        return formatter.cEnum(self, writer);
+        try ControlCharater.ESC.format(writer);
+        return writer.printAsciiChar(@intFromEnum(self), .{});
     }
 
     /// `%` Start sequence selecting character set
@@ -149,9 +148,9 @@ pub const ESCSequence = enum(u8) {
         };
     }
     fn format_with_pre(v: anytype, pre: u8, writer: *std.Io.Writer) std.Io.Writer.Error!void {
-        try formatter.any(ControlCharater.ESC, writer);
+        try ControlCharater.ESC.format(writer);
         try writer.writeByte(pre);
-        return formatter.cEnum(v, writer);
+        return writer.printAsciiChar(@intFromEnum(v), .{});
     }
 
     pub const _test = struct {
@@ -249,12 +248,12 @@ pub const CSISequenceFunction = enum(u8) {
     HPA = '`',
 
     pub fn format(self: Self, writer: *std.Io.Writer) std.Io.Writer.Error!void {
-        return formatter.cEnum(self, writer);
+        return writer.printAsciiChar(@intFromEnum(self), .{});
     }
     pub fn param(self: Self, writer: *std.Io.Writer, comptime fmt: []const u8, args: anytype) std.Io.Writer.Error!void {
-        try formatter.any(ESCSequence.CSI, writer);
+        try ESCSequence.CSI.format(writer);
         try writer.print(fmt, args);
-        try formatter.any(self, writer);
+        try self.format(writer);
     }
 
     pub const _test = struct {

@@ -1,7 +1,6 @@
 const std = @import("std");
 const helper = @import("helper");
 const alias = helper.alias;
-const formatter = helper.formatter;
 const Flag = helper.env.Flag;
 const Stringify = helper.Stringify;
 
@@ -9,9 +8,6 @@ const print = alias.print;
 const String = alias.String;
 const LiteralString = alias.LiteralString;
 const FormatOptions = alias.FormatOptions;
-
-const formatAny = formatter.any;
-const formatInt = formatter.dInt;
 
 const ctl = @import("mapping").ctl;
 const sep = @import("mapping").par.sep;
@@ -139,20 +135,20 @@ pub const Style = struct {
     fn stringifyCSI(self: Self, w: *std.io.Writer, csi: bool) std.io.Writer.Error!void {
         var first = true;
         if (self.flag_strict) {
-            if (csi) try formatAny(ctl.ESCSequence.CSI, w);
-            try formatInt(SGR.reset, w);
+            if (csi) try ctl.ESCSequence.CSI.format(w);
+            try w.printInt(SGR.reset, 10, .lower, .{});
             first = false;
         }
         inline for (std.meta.fields(Storage)) |field| {
             if (self.field_get(field.name)) {
-                if (csi and first) try formatAny(ctl.ESCSequence.CSI, w);
+                if (csi and first) try ctl.ESCSequence.CSI.format(w);
                 if (!first) try w.writeByte(sep);
                 @setEvalBranchQuota(100000);
-                try formatter.dEnum(std.meta.stringToEnum(SGR.Style, field.name).?, w);
+                try w.printInt(@intFromEnum(std.meta.stringToEnum(SGR.Style, field.name).?), 10, .lower, .{});
                 first = false;
             }
         }
-        if (csi and !first) try formatAny(ctl.CSISequenceFunction.SGR, w);
+        if (csi and !first) try ctl.CSISequenceFunction.SGR.format(w);
     }
     fn stringifyEnv(self: Self, w: *std.io.Writer) std.io.Writer.Error!void {
         if (Flag(.NO_STYLE).check()) return;
@@ -285,31 +281,31 @@ pub const Color = struct {
     };
 
     fn stringifyCSI(self: Self, w: *std.io.Writer, csi: bool) std.io.Writer.Error!void {
-        if (csi) try formatAny(ctl.ESCSequence.CSI, w);
+        if (csi) try ctl.ESCSequence.CSI.format(w);
         if (self.flag_strict) {
-            try formatInt(SGR.reset, w);
+            try w.printInt(SGR.reset, 10, .lower, .{});
             try w.writeByte(sep);
         }
         switch (self.storage) {
             .default => {
                 var v = Color8.base(false) + Color8.default;
                 if (self.flag_bg) v += SGR.Color.offset;
-                try formatInt(v, w);
+                try w.printInt(v, 10, .lower, .{});
             },
             .color8 => |c| {
                 var v = Color8.base(self.flag_bright) + @intFromEnum(c);
                 if (self.flag_bg) v += SGR.Color.offset;
-                try formatInt(v, w);
+                try w.printInt(v, 10, .lower, .{});
             },
             inline .color256, .colorRGB => |c| {
                 var pre = SGR.Color.ColorX.pre;
                 if (self.flag_bg) pre += SGR.Color.offset;
-                try formatInt(pre, w);
+                try w.printInt(pre, 10, .lower, .{});
                 try w.writeByte(sep);
-                try formatAny(c, w);
+                try c.format(w);
             },
         }
-        if (csi) try formatAny(ctl.CSISequenceFunction.SGR, w);
+        if (csi) try ctl.CSISequenceFunction.SGR.format(w);
     }
     fn stringifyEnv(self: Self, w: *std.io.Writer) std.io.Writer.Error!void {
         if (Flag(.NO_COLOR).check()) return;
@@ -576,13 +572,13 @@ pub const Attribute = struct {
     fn stringifyCSI(self: Self, w: *std.Io.Writer, csi: bool) std.Io.Writer.Error!void {
         var first = true;
         if (self.flag_strict) {
-            if (csi) try formatAny(ctl.ESCSequence.CSI, w);
-            try formatInt(SGR.reset, w);
+            if (csi) try ctl.ESCSequence.CSI.format(w);
+            try w.printInt(SGR.reset, 10, .lower, .{});
             first = false;
         }
         inline for (std.meta.fields(Storage)) |field| {
             if (@field(self.storage, field.name)) |v| {
-                if (csi and first) try formatAny(ctl.ESCSequence.CSI, w);
+                if (csi and first) try ctl.ESCSequence.CSI.format(w);
                 if (!first) try w.writeByte(sep);
                 var relaxed = v;
                 relaxed.flag_strict = false;
@@ -590,7 +586,7 @@ pub const Attribute = struct {
                 first = false;
             }
         }
-        if (csi and !first) try formatAny(ctl.CSISequenceFunction.SGR, w);
+        if (csi and !first) try ctl.CSISequenceFunction.SGR.format(w);
     }
     fn stringifyEnv(self: Self, w: *std.Io.Writer) std.Io.Writer.Error!void {
         if (Flag(.NO_COLOR).check() and Flag(.NO_STYLE).check())
