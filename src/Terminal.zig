@@ -25,8 +25,8 @@ pub fn new(file: std.fs.File) Self {
 }
 pub fn getStd() Self {
     return .{
-        .w = std.io.getStdOut().writer(),
-        .r = std.io.getStdIn().reader(),
+        .w = std.Io.getStdOut().writer(),
+        .r = std.Io.getStdIn().reader(),
     };
 }
 

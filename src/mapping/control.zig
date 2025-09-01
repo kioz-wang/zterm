@@ -1,4 +1,5 @@
 const std = @import("std");
+const Writer = std.Io.Writer;
 const alias = @import("helper").alias;
 const FormatOptions = alias.FormatOptions;
 
@@ -34,7 +35,7 @@ pub const ControlCharater = enum(u8) {
     /// is equivalent to `ESC [`
     CSI = 0x9B,
 
-    pub fn format(self: Self, writer: *std.Io.Writer) std.Io.Writer.Error!void {
+    pub fn format(self: Self, writer: *Writer) Writer.Error!void {
         return writer.writeByte(@intFromEnum(self));
     }
 
@@ -76,7 +77,7 @@ pub const ESCSequence = enum(u8) {
     /// Control Sequence Introducer
     CSI = '[',
 
-    pub fn format(self: ESCSequence, writer: *std.Io.Writer) std.Io.Writer.Error!void {
+    pub fn format(self: ESCSequence, writer: *Writer) Writer.Error!void {
         try ControlCharater.ESC.format(writer);
         return writer.printAsciiChar(@intFromEnum(self), .{});
     }
@@ -93,7 +94,7 @@ pub const ESCSequence = enum(u8) {
         /// Select UTF-8 (obsolete)
         UTF8_Obsolete = '8',
 
-        pub fn format(self: Self, writer: *std.Io.Writer) std.Io.Writer.Error!void {
+        pub fn format(self: Self, writer: *Writer) Writer.Error!void {
             return format_with_pre(self, Self.pre, writer);
         }
     };
@@ -105,7 +106,7 @@ pub const ESCSequence = enum(u8) {
         /// DEC screen alignment test - fill screen with E's
         DECALN = '8',
 
-        pub fn format(self: Self, writer: *std.Io.Writer) std.Io.Writer.Error!void {
+        pub fn format(self: Self, writer: *Writer) Writer.Error!void {
             return format_with_pre(self, Self.pre, writer);
         }
     };
@@ -123,7 +124,7 @@ pub const ESCSequence = enum(u8) {
         /// Set palette, with parameter given in 7 hexadecimal digits nrrggbb after the final P. Here n is the color (0–15), and rrggbb indicates the red/green/blue values (0–255)
         Set = 'P',
 
-        pub fn format(self: Self, writer: *std.Io.Writer) std.Io.Writer.Error!void {
+        pub fn format(self: Self, writer: *Writer) Writer.Error!void {
             return format_with_pre(self, Self.pre, writer);
         }
     };
@@ -142,12 +143,12 @@ pub const ESCSequence = enum(u8) {
             /// Select user mapping - the map that is loaded by the utility mapscrn(8)
             User = 'K',
 
-            pub fn format(self: Self, writer: *std.Io.Writer) std.Io.Writer.Error!void {
+            pub fn format(self: Self, writer: *Writer) Writer.Error!void {
                 return format_with_pre(self, Self.pre, writer);
             }
         };
     }
-    fn format_with_pre(v: anytype, pre: u8, writer: *std.Io.Writer) std.Io.Writer.Error!void {
+    fn format_with_pre(v: anytype, pre: u8, writer: *Writer) Writer.Error!void {
         try ControlCharater.ESC.format(writer);
         try writer.writeByte(pre);
         return writer.printAsciiChar(@intFromEnum(v), .{});
@@ -247,10 +248,10 @@ pub const CSISequenceFunction = enum(u8) {
     /// Move cursor to indicated column in current row
     HPA = '`',
 
-    pub fn format(self: Self, writer: *std.Io.Writer) std.Io.Writer.Error!void {
+    pub fn format(self: Self, writer: *Writer) Writer.Error!void {
         return writer.printAsciiChar(@intFromEnum(self), .{});
     }
-    pub fn param(self: Self, writer: *std.Io.Writer, comptime fmt: []const u8, args: anytype) std.Io.Writer.Error!void {
+    pub fn param(self: Self, writer: *Writer, comptime fmt: []const u8, args: anytype) Writer.Error!void {
         try ESCSequence.CSI.format(writer);
         try writer.print(fmt, args);
         try self.format(writer);

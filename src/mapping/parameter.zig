@@ -1,4 +1,5 @@
 const std = @import("std");
+const Writer = std.Io.Writer;
 const alias = @import("helper").alias;
 
 pub const sep: u8 = ';';
@@ -94,7 +95,7 @@ pub const SGR = struct {
 
                 c: u8,
 
-                pub fn format(self: Self, writer: *std.io.Writer) std.io.Writer.Error!void {
+                pub fn format(self: Self, writer: *Writer) Writer.Error!void {
                     try writer.printInt(Self.pre, 10, .lower, .{});
                     try writer.writeByte(sep);
                     return writer.printInt(self.c, 10, .lower, .{});
@@ -119,7 +120,7 @@ pub const SGR = struct {
                 g: u8,
                 b: u8,
 
-                pub fn format(self: Self, writer: *std.io.Writer) std.io.Writer.Error!void {
+                pub fn format(self: Self, writer: *Writer) Writer.Error!void {
                     try writer.printInt(Self.pre, 10, .lower, .{});
                     try writer.writeByte(sep);
                     try writer.printInt(self.r, 10, .lower, .{});

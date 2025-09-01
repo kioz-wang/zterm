@@ -1,4 +1,5 @@
 const std = @import("std");
+const Writer = std.Io.Writer;
 const helper = @import("helper");
 const alias = helper.alias;
 const Flag = helper.env.Flag;
@@ -60,14 +61,14 @@ pub const Style = struct {
     pub const default = new();
     pub const none = default;
 
-    pub fn fprint(self: Self, w: *std.io.Writer, comptime fmt: []const u8, args: anytype) std.io.Writer.Error!void {
+    pub fn fprint(self: Self, w: *Writer, comptime fmt: []const u8, args: anytype) Writer.Error!void {
         try self.stringifyEnv(w);
         try std.fmt.format(w, fmt, args);
     }
-    pub fn format(self: Self, w: *std.io.Writer) std.io.Writer.Error!void {
+    pub fn format(self: Self, w: *Writer) Writer.Error!void {
         try self.stringifyEnv(w);
     }
-    pub fn stringify(self: Self, w: *std.io.Writer) std.io.Writer.Error!void {
+    pub fn stringify(self: Self, w: *Writer) Writer.Error!void {
         try self.stringifyCSI(w, true);
     }
     pub fn toString(self: Self) *const [helper.stringify(self).count():0]u8 {
@@ -132,7 +133,7 @@ pub const Style = struct {
         unreachable;
     }
 
-    fn stringifyCSI(self: Self, w: *std.io.Writer, csi: bool) std.io.Writer.Error!void {
+    fn stringifyCSI(self: Self, w: *Writer, csi: bool) Writer.Error!void {
         var first = true;
         if (self.flag_strict) {
             if (csi) try ctl.ESCSequence.CSI.format(w);
@@ -150,7 +151,7 @@ pub const Style = struct {
         }
         if (csi and !first) try ctl.CSISequenceFunction.SGR.format(w);
     }
-    fn stringifyEnv(self: Self, w: *std.io.Writer) std.io.Writer.Error!void {
+    fn stringifyEnv(self: Self, w: *Writer) Writer.Error!void {
         if (Flag(.NO_STYLE).check()) return;
         try self.stringify(w);
     }
@@ -219,14 +220,14 @@ pub const Color = struct {
         return colorHex(c);
     }
 
-    pub fn fprint(self: Self, w: *std.io.Writer, comptime fmt: []const u8, args: anytype) std.io.Writer.Error!void {
+    pub fn fprint(self: Self, w: *Writer, comptime fmt: []const u8, args: anytype) Writer.Error!void {
         try self.stringifyEnv(w);
         try std.fmt.format(w, fmt, args);
     }
-    pub fn format(self: Self, w: *std.io.Writer) std.io.Writer.Error!void {
+    pub fn format(self: Self, w: *Writer) Writer.Error!void {
         try self.stringifyEnv(w);
     }
-    pub fn stringify(self: Self, w: *std.io.Writer) std.io.Writer.Error!void {
+    pub fn stringify(self: Self, w: *Writer) Writer.Error!void {
         try self.stringifyCSI(w, true);
     }
     pub fn toString(self: Self) *const [helper.stringify(self).count():0]u8 {
@@ -280,7 +281,7 @@ pub const Color = struct {
         }
     };
 
-    fn stringifyCSI(self: Self, w: *std.io.Writer, csi: bool) std.io.Writer.Error!void {
+    fn stringifyCSI(self: Self, w: *Writer, csi: bool) Writer.Error!void {
         if (csi) try ctl.ESCSequence.CSI.format(w);
         if (self.flag_strict) {
             try w.printInt(SGR.reset, 10, .lower, .{});
@@ -307,7 +308,7 @@ pub const Color = struct {
         }
         if (csi) try ctl.CSISequenceFunction.SGR.format(w);
     }
-    fn stringifyEnv(self: Self, w: *std.io.Writer) std.io.Writer.Error!void {
+    fn stringifyEnv(self: Self, w: *Writer) Writer.Error!void {
         if (Flag(.NO_COLOR).check()) return;
         try self.stringify(w);
     }
@@ -353,14 +354,14 @@ pub const Attribute = struct {
         return self.field_set(@src().fn_name, v.bg());
     }
 
-    pub fn fprint(self: Self, w: *std.io.Writer, comptime fmt: []const u8, args: anytype) std.io.Writer.Error!void {
+    pub fn fprint(self: Self, w: *Writer, comptime fmt: []const u8, args: anytype) Writer.Error!void {
         try self.stringifyEnv(w);
         try w.print(fmt, args);
     }
-    pub fn format(self: Self, w: *std.io.Writer) std.io.Writer.Error!void {
+    pub fn format(self: Self, w: *Writer) Writer.Error!void {
         try self.stringifyEnv(w);
     }
-    pub fn stringify(self: Self, w: *std.io.Writer) std.io.Writer.Error!void {
+    pub fn stringify(self: Self, w: *Writer) Writer.Error!void {
         try self.stringifyCSI(w, true);
     }
     pub fn toString(self: Self) *const [helper.stringify(self).count():0]u8 {
@@ -543,7 +544,7 @@ pub const Attribute = struct {
             var buffer = std.mem.zeroes([512]u8);
             forceNoColor(false);
             forceNoStyle(false);
-            var bs = std.Io.Writer.fixed(&buffer);
+            var bs = Writer.fixed(&buffer);
             try attr.fprint(&bs, "string {s} int {d}", .{ "hello", 6 });
             try testing.expectEqualStrings(
                 "\x1b[1;21;32;47mstring hello int 6",
@@ -569,7 +570,7 @@ pub const Attribute = struct {
         return self.color8(c);
     }
 
-    fn stringifyCSI(self: Self, w: *std.Io.Writer, csi: bool) std.Io.Writer.Error!void {
+    fn stringifyCSI(self: Self, w: *Writer, csi: bool) Writer.Error!void {
         var first = true;
         if (self.flag_strict) {
             if (csi) try ctl.ESCSequence.CSI.format(w);
@@ -588,7 +589,7 @@ pub const Attribute = struct {
         }
         if (csi and !first) try ctl.CSISequenceFunction.SGR.format(w);
     }
-    fn stringifyEnv(self: Self, w: *std.Io.Writer) std.Io.Writer.Error!void {
+    fn stringifyEnv(self: Self, w: *Writer) Writer.Error!void {
         if (Flag(.NO_COLOR).check() and Flag(.NO_STYLE).check())
             return;
         var obj = self;
@@ -613,13 +614,13 @@ pub fn Value(A: type, V: type) type {
             return .{ .a = attr.strict(), .v = value };
         }
 
-        pub fn format(self: Self, writer: *std.io.Writer) std.io.Writer.Error!void {
+        pub fn format(self: Self, writer: *Writer) Writer.Error!void {
             try self.a.stringifyEnv(writer);
             try writer.printValue("", .{}, self.v, std.fmt.default_max_depth);
             try Attribute.reset.stringifyEnv(writer);
         }
 
-        pub fn formatNumber(self: Self, writer: *std.io.Writer, number: std.fmt.Number) std.io.Writer.Error!void {
+        pub fn formatNumber(self: Self, writer: *std.Io.Writer, number: std.fmt.Number) std.Io.Writer.Error!void {
             const options: std.fmt.Options = .{
                 .alignment = number.alignment,
                 .fill = number.fill,
@@ -668,7 +669,7 @@ pub fn Value(A: type, V: type) type {
             try Attribute.reset.stringifyEnv(writer);
         }
 
-        pub fn formatString(self: Self, writer: *std.io.Writer) std.io.Writer.Error!void {
+        pub fn formatString(self: Self, writer: *std.Io.Writer) std.Io.Writer.Error!void {
             try self.a.stringifyEnv(writer);
             try writer.alignBufferOptions(self.v, .{});
             try Attribute.reset.stringifyEnv(writer);
