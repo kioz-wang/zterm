@@ -95,7 +95,7 @@ pub const SGR = struct {
 
                 c: u8,
 
-                pub fn format(self: Self, comptime _: []const u8, _: alias.FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
+                pub fn format(self: Self, writer: *std.io.Writer) std.io.Writer.Error!void {
                     try formatInt(Self.pre, writer);
                     try writer.writeByte(sep);
                     return formatInt(self.c, writer);
@@ -105,9 +105,9 @@ pub const SGR = struct {
                     const testing = std.testing;
                     const print = alias.print;
                     test Color256 {
-                        try testing.expectEqualStrings("5;66", print("{}", .{Self{ .c = 66 }}));
-                        try testing.expectEqualStrings("5;12", print("{}", .{Self{ .c = @intFromEnum(IBGR.blue) }}));
-                        try testing.expectEqualStrings("5;241", print("{}", .{Self{ .c = @intFromEnum(Grayscale.grey39) }}));
+                        try testing.expectEqualStrings("5;66", print("{f}", .{Self{ .c = 66 }}));
+                        try testing.expectEqualStrings("5;12", print("{f}", .{Self{ .c = @intFromEnum(IBGR.blue) }}));
+                        try testing.expectEqualStrings("5;241", print("{f}", .{Self{ .c = @intFromEnum(Grayscale.grey39) }}));
                     }
                 };
             };
@@ -120,7 +120,7 @@ pub const SGR = struct {
                 g: u8,
                 b: u8,
 
-                pub fn format(self: Self, comptime _: []const u8, _: alias.FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
+                pub fn format(self: Self, writer: *std.io.Writer) std.io.Writer.Error!void {
                     try formatInt(Self.pre, writer);
                     try writer.writeByte(sep);
                     try formatInt(self.r, writer);
@@ -134,7 +134,7 @@ pub const SGR = struct {
                     const testing = std.testing;
                     const print = alias.print;
                     test ColorRGB {
-                        try testing.expectEqualStrings("2;1;2;3", print("{}", .{Self{ .r = 1, .g = 2, .b = 3 }}));
+                        try testing.expectEqualStrings("2;1;2;3", print("{f}", .{Self{ .r = 1, .g = 2, .b = 3 }}));
                     }
                 };
             };

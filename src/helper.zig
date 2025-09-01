@@ -12,20 +12,38 @@ const String = alias.String;
 
 pub const formatter = struct {
     const assert = std.debug.assert;
-    pub fn any(v: anytype, writer: anytype) @TypeOf(writer).Error!void {
-        return std.fmt.formatType(v, "any", .{}, writer, std.fmt.default_max_depth);
+    pub fn any(v: anytype, writer: *std.io.Writer) std.io.Writer.Error!void {
+        const actual_fmt = switch (@typeInfo(@TypeOf(v))) {
+            .array, .vector, .optional, .error_union => "any",
+            .pointer => |ptr_info| switch (ptr_info.size) {
+                .one => switch (@typeInfo(ptr_info.child)) {
+                    .array => "any",
+                    else => "",
+                },
+                .many, .c => "*",
+                .slice => "any",
+            },
+            else => "",
+        };
+        if (comptime std.mem.eql(u8, actual_fmt, "*")) {
+            return writer.printAddress(v, .{});
+        }
+        if (std.meta.hasMethod(@TypeOf(v), "format")) {
+            return try v.format(writer);
+        }
+        return writer.printValue(actual_fmt, .{}, v, std.fmt.default_max_depth);
     }
-    pub fn dInt(v: anytype, writer: anytype) @TypeOf(writer).Error!void {
+    pub fn dInt(v: anytype, writer: *std.io.Writer) std.io.Writer.Error!void {
         assert(@typeInfo(@TypeOf(v)) == .int);
-        return std.fmt.formatIntValue(v, "d", .{}, writer);
+        return writer.printIntAny(v, 10, .lower, .{});
     }
-    pub fn dEnum(v: anytype, writer: anytype) @TypeOf(writer).Error!void {
+    pub fn dEnum(v: anytype, writer: *std.io.Writer) std.io.Writer.Error!void {
         assert(@typeInfo(@TypeOf(v)) == .@"enum");
         return dInt(@intFromEnum(v), writer);
     }
-    pub fn cEnum(v: anytype, writer: anytype) @TypeOf(writer).Error!void {
+    pub fn cEnum(v: anytype, writer: *std.io.Writer) std.io.Writer.Error!void {
         assert(@typeInfo(@TypeOf(v)) == .@"enum");
-        return std.fmt.formatIntValue(@intFromEnum(v), "c", .{}, writer);
+        return writer.printAsciiChar(@intFromEnum(v), .{});
     }
     pub fn Raw(T: type) type {
         return struct {
@@ -83,17 +101,17 @@ pub fn Stringify(V: type) type {
         v: V,
         const Self = @This();
         pub fn count(self: Self) usize {
-            var writer = std.io.countingWriter(std.io.null_writer);
+            var counting = std.Io.Writer.Discarding.init(&@as([0]u8, .{}));
             @setEvalBranchQuota(100000); // TODO why?
-            self.v.stringify(writer.writer()) catch unreachable;
-            return writer.bytes_written;
+            self.v.stringify(&counting.writer) catch unreachable;
+            return counting.fullCount();
         }
         pub inline fn literal(self: Self) *const [self.count():0]u8 {
             comptime {
                 var buf: [self.count():0]u8 = undefined;
-                var fbs = std.io.fixedBufferStream(&buf);
+                var fbs = std.Io.Writer.fixed(&buf);
                 @setEvalBranchQuota(100000); // TODO why?
-                self.v.stringify(fbs.writer()) catch unreachable;
+                self.v.stringify(&fbs) catch unreachable;
                 buf[buf.len] = 0;
                 const final = buf;
                 return &final;
