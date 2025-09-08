@@ -1,7 +1,6 @@
 const std = @import("std");
 const Writer = std.Io.Writer;
 const alias = @import("helper").alias;
-const FormatOptions = alias.FormatOptions;
 
 pub const ControlCharater = enum(u8) {
     const Self = @This();

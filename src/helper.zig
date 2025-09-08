@@ -5,7 +5,6 @@ pub const alias = struct {
     pub const LiteralString = [:0]const u8;
     pub const print = std.fmt.comptimePrint;
     pub const sprint = std.fmt.bufPrint;
-    pub const FormatOptions = std.fmt.FormatOptions;
 };
 
 const String = alias.String;

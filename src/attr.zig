@@ -5,10 +5,8 @@ const alias = helper.alias;
 const Flag = helper.env.Flag;
 const Stringify = helper.Stringify;
 
-const print = alias.print;
 const String = alias.String;
 const LiteralString = alias.LiteralString;
-const FormatOptions = alias.FormatOptions;
 
 const ctl = @import("mapping").ctl;
 const sep = @import("mapping").par.sep;
@@ -63,7 +61,7 @@ pub const Style = struct {
 
     pub fn fprint(self: Self, w: *Writer, comptime fmt: []const u8, args: anytype) Writer.Error!void {
         try self.stringifyEnv(w);
-        try std.fmt.format(w, fmt, args);
+        try w.print(fmt, args);
     }
     pub fn format(self: Self, w: *Writer) Writer.Error!void {
         try self.stringifyEnv(w);
@@ -74,7 +72,7 @@ pub const Style = struct {
     pub fn toString(self: Self) *const [helper.stringify(self).count():0]u8 {
         return helper.stringify(self).literal();
     }
-    pub fn value(self: Self, v: anytype) Value(Self, @TypeOf(v)) {
+    pub fn value(self: Self, v: anytype, comptime fmt: []const u8) Value(Self, @TypeOf(v), fmt) {
         return .new(self, v);
     }
 
@@ -107,11 +105,11 @@ pub const Style = struct {
             forceNoStyle(false);
             try testing.expectEqualStrings(
                 "\x1b[0;1mhello\x1b[0m",
-                try sprint(&buffer, "{f}", .{std.fmt.alt(new().set(.bold).value("hello"), .formatString)}),
+                try sprint(&buffer, "{f}", .{new().set(.bold).value("hello", "s")}),
             );
             try testing.expectEqualStrings(
                 "\x1b[0;1mcc\x1b[0m",
-                try sprint(&buffer, "{x}", .{new().set(.bold).value(@as(u16, 0xcc))}),
+                try sprint(&buffer, "{f}", .{new().set(.bold).value(@as(u16, 0xcc), "x")}),
             );
         }
     };
@@ -233,7 +231,7 @@ pub const Color = struct {
     pub fn toString(self: Self) *const [helper.stringify(self).count():0]u8 {
         return helper.stringify(self).literal();
     }
-    pub fn value(self: Self, v: anytype) Value(Self, @TypeOf(v)) {
+    pub fn value(self: Self, v: anytype, comptime fmt: []const u8) Value(Self, @TypeOf(v), fmt) {
         return .new(self, v);
     }
 
@@ -271,12 +269,12 @@ pub const Color = struct {
                 try sprint(
                     &buffer,
                     "{f}",
-                    .{std.fmt.alt((colorHexS("#010203") catch unreachable).value("hello"), .formatString)},
+                    .{(colorHexS("#010203") catch unreachable).value("hello", "s")},
                 ),
             );
             try testing.expectEqualStrings(
                 "\x1b[0;94mcc\x1b[0m",
-                try sprint(&buffer, "{x}", .{color8(.blue, true).value(@as(u16, 0xcc))}),
+                try sprint(&buffer, "{f}", .{color8(.blue, true).value(@as(u16, 0xcc), "x")}),
             );
         }
     };
@@ -367,7 +365,7 @@ pub const Attribute = struct {
     pub fn toString(self: Self) *const [helper.stringify(self).count():0]u8 {
         return helper.stringify(self).literal();
     }
-    pub fn value(self: Self, v: anytype) Value(Self, @TypeOf(v)) {
+    pub fn value(self: Self, v: anytype, comptime fmt: []const u8) Value(Self, @TypeOf(v), fmt) {
         return .new(self, v);
     }
 
@@ -528,15 +526,21 @@ pub const Attribute = struct {
             forceNoStyle(false);
             try testing.expectEqualStrings(
                 "\x1b[0;1;21;32;47mhello\x1b[0m",
-                try sprint(&buffer, "{f}", .{std.fmt.alt(attr.value("hello"), .formatString)}),
+                try sprint(&buffer, "{f}", .{attr.value("hello", "s")}),
             );
             try testing.expectEqualStrings(
                 "\x1b[0;1;21;32;47m00c1\x1b[0m",
-                try sprint(&buffer, "{x:04}", .{attr.value(@as(u32, 0xc1))}),
+                try sprint(&buffer, "{f}", .{attr.value(@as(u32, 0xc1), "x:04")}),
+            );
+            // See https://ziglang.org/download/0.15.1/release-notes.html#Format-Methods-No-Longer-Have-Format-Strings-or-Options
+            // The deleted FormatOptions are now for numbers only.
+            try testing.expectEqualStrings(
+                "\x1b[0;1;21;32;47m00c1\x1b[0m",
+                try sprint(&buffer, "{f:@<7}", .{attr.value(@as(u32, 0xc1), "x:0>4")}),
             );
             try testing.expectEqualStrings(
                 "\x1b[0;1;21;32;47mtrue\x1b[0m",
-                try sprint(&buffer, "{f}", .{attr.value(true)}),
+                try sprint(&buffer, "{f}", .{attr.value(true, "")}),
             );
         }
         test "Attribute Writer" {
@@ -604,7 +608,7 @@ pub const Attribute = struct {
     }
 };
 
-pub fn Value(A: type, V: type) type {
+pub fn Value(A: type, V: type, comptime fmt: []const u8) type {
     return struct {
         a: A,
         v: V,
@@ -616,62 +620,7 @@ pub fn Value(A: type, V: type) type {
 
         pub fn format(self: Self, writer: *Writer) Writer.Error!void {
             try self.a.stringifyEnv(writer);
-            try writer.printValue("", .{}, self.v, std.fmt.default_max_depth);
-            try Attribute.reset.stringifyEnv(writer);
-        }
-
-        pub fn formatNumber(self: Self, writer: *std.Io.Writer, number: std.fmt.Number) std.Io.Writer.Error!void {
-            const options: std.fmt.Options = .{
-                .alignment = number.alignment,
-                .fill = number.fill,
-                .precision = number.precision,
-                .width = number.width,
-            };
-            try self.a.stringifyEnv(writer);
-            switch (number.mode) {
-                .decimal => switch (@typeInfo(@TypeOf(self.v))) {
-                    .float, .comptime_float, .int, .comptime_int, .@"struct", .@"enum", .vector => {
-                        try writer.printValue("d", options, self.v, std.fmt.default_max_depth);
-                    },
-                    else => unreachable,
-                },
-                .binary => switch (@typeInfo(@TypeOf(self.v))) {
-                    .int, .comptime_int, .@"enum", .@"struct", .vector => {
-                        try writer.printValue("b", options, self.v, std.fmt.default_max_depth);
-                    },
-                    else => unreachable,
-                },
-                .octal => switch (@typeInfo(@TypeOf(self.v))) {
-                    .int, .comptime_int, .@"enum", .@"struct", .vector => {
-                        try writer.printValue("o", options, self.v, std.fmt.default_max_depth);
-                    },
-                    else => unreachable,
-                },
-                .hex => switch (@typeInfo(@TypeOf(self.v))) {
-                    .float, .comptime_float, .int, .comptime_int, .@"enum", .@"struct", .pointer, .array, .vector => {
-                        switch (number.case) {
-                            .lower => try writer.printValue("x", options, self.v, std.fmt.default_max_depth),
-                            .upper => try writer.printValue("X", options, self.v, std.fmt.default_max_depth),
-                        }
-                    },
-                    else => unreachable,
-                },
-                .scientific => switch (@typeInfo(@TypeOf(self.v))) {
-                    .float, .comptime_float, .@"struct" => {
-                        switch (number.case) {
-                            .lower => try writer.printValue("e", options, self.v, std.fmt.default_max_depth),
-                            .upper => try writer.printValue("E", options, self.v, std.fmt.default_max_depth),
-                        }
-                    },
-                    else => unreachable,
-                },
-            }
-            try Attribute.reset.stringifyEnv(writer);
-        }
-
-        pub fn formatString(self: Self, writer: *std.Io.Writer) std.Io.Writer.Error!void {
-            try self.a.stringifyEnv(writer);
-            try writer.alignBufferOptions(self.v, .{});
+            try writer.print(std.fmt.comptimePrint("{{{s}}}", .{fmt}), .{self.v});
             try Attribute.reset.stringifyEnv(writer);
         }
     };
