@@ -48,11 +48,12 @@ pub fn castI(i: anytype) i32 {
 }
 
 pub fn Stringify(V: type) type {
+    const Writer = std.Io.Writer;
     return struct {
         v: V,
         const Self = @This();
         pub fn count(self: Self) usize {
-            var counting = std.Io.Writer.Discarding.init(&@as([0]u8, .{}));
+            var counting: Writer.Discarding = .init(&@as([0]u8, .{}));
             @setEvalBranchQuota(100000); // TODO why?
             self.v.stringify(&counting.writer) catch unreachable;
             return counting.fullCount();
@@ -60,7 +61,7 @@ pub fn Stringify(V: type) type {
         pub inline fn literal(self: Self) *const [self.count():0]u8 {
             comptime {
                 var buf: [self.count():0]u8 = undefined;
-                var fbs = std.Io.Writer.fixed(&buf);
+                var fbs: Writer = .fixed(&buf);
                 @setEvalBranchQuota(100000); // TODO why?
                 self.v.stringify(&fbs) catch unreachable;
                 buf[buf.len] = 0;
