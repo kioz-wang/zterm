@@ -106,73 +106,64 @@ pub const Point = union(enum) {
     }
 };
 
-pub fn Cursor(W: type) type {
-    return struct {
-        w: W,
+pub const Cursor = struct {
+    const Writer = std.Io.Writer;
+    const Self = @This();
 
-        const Self = @This();
-        pub const Error = W.Error;
+    w: *Writer,
 
-        pub fn new(writer: W) Self {
-            return .{ .w = writer };
-        }
+    pub fn save(self: *const Self) Writer.Error!void {
+        try F.CUS.param(self.w, "", .{});
+    }
+    pub fn restore(self: *const Self) Writer.Error!void {
+        try F.CUR.param(self.w, "", .{});
+    }
 
-        pub fn save(self: Self) Error!void {
-            try F.CUS.param(self.w, "", .{});
+    pub fn beginRow(self: *const Self, n: Row) Writer.Error!void {
+        switch (n) {
+            .stay => try self.column(.at(0)),
+            ._up => |i| try F.CPL.param(self.w, "{d}", .{i}),
+            ._down => |i| try F.CNL.param(self.w, "{d}", .{i}),
+            ._at => |i| try self.move(.at(castVec2(0, i))),
         }
-        pub fn restore(self: Self) Error!void {
-            try F.CUR.param(self.w, "", .{});
+    }
+    pub fn row(self: *const Self, n: Row) Writer.Error!void {
+        switch (n) {
+            .stay => return,
+            ._up => |i| try F.CUU.param(self.w, "{d}", .{i}),
+            // same as `F.VPR`
+            ._down => |i| try F.CUD.param(self.w, "{d}", .{i}),
+            ._at => |i| try F.VPA.param(self.w, "{d}", .{i + 1}),
         }
-
-        pub fn beginRow(self: Self, n: Row) Error!void {
-            switch (n) {
-                .stay => try self.column(.at(0)),
-                ._up => |i| try F.CPL.param(self.w, "{d}", .{i}),
-                ._down => |i| try F.CNL.param(self.w, "{d}", .{i}),
-                ._at => |i| try self.move(.at(castVec2(0, i))),
-            }
+    }
+    pub fn column(self: *const Self, n: Column) Writer.Error!void {
+        switch (n) {
+            .stay => return,
+            ._left => |i| try F.CUF.param(self.w, "{d}", .{i}),
+            // same as `F.HPR`
+            ._right => |i| try F.CUB.param(self.w, "{d}", .{i}),
+            // same as `F.HPA`
+            ._at => |i| try F.CHA.param(self.w, "{d}", .{i + 1}),
         }
-        pub fn row(self: Self, n: Row) Error!void {
-            switch (n) {
-                .stay => return,
-                ._up => |i| try F.CUU.param(self.w, "{d}", .{i}),
-                // same as `F.VPR`
-                ._down => |i| try F.CUD.param(self.w, "{d}", .{i}),
-                ._at => |i| try F.VPA.param(self.w, "{d}", .{i + 1}),
-            }
+    }
+    pub fn move(self: *const Self, p: Point) Writer.Error!void {
+        const sep = @import("mapping").par.sep;
+        switch (p) {
+            .stay => return,
+            ._rel => |v| {
+                try self.row(.rel(v[1]));
+                try self.column(.rel(v[0]));
+            },
+            ._at => |v|
+            // same as `F.HVP`
+            try F.CUP.param(self.w, "{d}{c}{d}", .{
+                @as(u32, @intCast(v[1])) + 1,
+                sep,
+                @as(u32, @intCast(v[0])) + 1,
+            }),
         }
-        pub fn column(self: Self, n: Column) Error!void {
-            switch (n) {
-                .stay => return,
-                ._left => |i| try F.CUF.param(self.w, "{d}", .{i}),
-                // same as `F.HPR`
-                ._right => |i| try F.CUB.param(self.w, "{d}", .{i}),
-                // same as `F.HPA`
-                ._at => |i| try F.CHA.param(self.w, "{d}", .{i + 1}),
-            }
-        }
-        pub fn move(self: Self, p: Point) Error!void {
-            const sep = @import("mapping").par.sep;
-            switch (p) {
-                .stay => return,
-                ._rel => |v| {
-                    try self.row(.rel(v[1]));
-                    try self.column(.rel(v[0]));
-                },
-                ._at => |v|
-                // same as `F.HVP`
-                try F.CUP.param(self.w, "{d}{c}{d}", .{
-                    @as(u32, @intCast(v[1])) + 1,
-                    sep,
-                    @as(u32, @intCast(v[0])) + 1,
-                }),
-            }
-        }
-    };
-}
-pub fn cursor(w: anytype) Cursor(@TypeOf(w)) {
-    return .new(w);
-}
+    }
+};
 
 test {
     _ = Region._test;

@@ -32,7 +32,6 @@ pub fn build(b: *std.Build) void {
     });
     mod_attr.addImport("helper", mod_helper);
     mod_attr.addImport("mapping", mod_mapping);
-    mod_attr.addImport("cursor", mod_cursor);
 
     const mod_term = b.addModule("Term", .{
         .root_source_file = b.path("src/Terminal.zig"),
@@ -50,7 +49,7 @@ pub fn build(b: *std.Build) void {
         "test_filter",
         "Skip tests that do not match any of the specified filters",
     ) orelse &.{};
-    const mods_utest = [_]*std.Build.Module{ mod_helper, mod_attr, mod_mapping, mod_cursor };
+    const mods_utest = [_]*std.Build.Module{ mod_helper, mod_attr, mod_mapping, mod_cursor, mod_term };
     for (mods_utest) |unit| {
         const utest = b.addRunArtifact(
             b.addTest(.{
