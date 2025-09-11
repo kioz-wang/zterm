@@ -9,8 +9,10 @@ A Zig implementation of [console_codes (4)](https://www.man7.org/linux/man-pages
 - No memory allocator needed
 - Generate attributes containing multiple styles (e.g. bold, italic) and colors (including foreground/background)
   - Comptime constructor
-  - Use `.value(v)` to wrap any value for formatting, enforcing strict attribute handling (applied before output and reset after)
+  - Use `.value(v, fmt)` to wrap any value for formatting, enforcing strict attribute handling (applied before output and reset after)
+    - `fmt` is a single fmt for `v`, and no `{}` enclosed
   - Use `.fprint(writer, fmt, args)` to incrementally apply an attribute before output
+    - `fmt` is a string contains some `fmt`
 - Move cursor to/at a position
 - Get the position of current cursor
 - Support [`NO_COLOR`](https://no-color.org/) (also, support `NO_STYLE`!)
