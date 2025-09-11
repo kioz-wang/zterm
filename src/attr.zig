@@ -1,17 +1,12 @@
 const std = @import("std");
+const Writer = std.Io.Writer;
 const helper = @import("helper");
 const alias = helper.alias;
-const formatter = helper.formatter;
 const Flag = helper.env.Flag;
 const Stringify = helper.Stringify;
 
-const print = alias.print;
 const String = alias.String;
 const LiteralString = alias.LiteralString;
-const FormatOptions = alias.FormatOptions;
-
-const formatAny = formatter.any;
-const formatInt = formatter.dInt;
 
 const ctl = @import("mapping").ctl;
 const sep = @import("mapping").par.sep;
@@ -64,20 +59,20 @@ pub const Style = struct {
     pub const default = new();
     pub const none = default;
 
-    pub fn fprint(self: Self, w: anytype, comptime fmt: []const u8, args: anytype) @TypeOf(w).Error!void {
+    pub fn fprint(self: Self, w: *Writer, comptime fmt: []const u8, args: anytype) Writer.Error!void {
         try self.stringifyEnv(w);
-        try std.fmt.format(w, fmt, args);
+        try w.print(fmt, args);
     }
-    pub fn format(self: Self, comptime _: []const u8, _: FormatOptions, w: anytype) @TypeOf(w).Error!void {
+    pub fn format(self: Self, w: *Writer) Writer.Error!void {
         try self.stringifyEnv(w);
     }
-    pub fn stringify(self: Self, w: anytype) @TypeOf(w).Error!void {
+    pub fn stringify(self: Self, w: *Writer) Writer.Error!void {
         try self.stringifyCSI(w, true);
     }
     pub fn toString(self: Self) *const [helper.stringify(self).count():0]u8 {
         return helper.stringify(self).literal();
     }
-    pub fn value(self: Self, v: anytype) Value(Self, @TypeOf(v)) {
+    pub fn value(self: Self, v: anytype, comptime fmt: []const u8) Value(Self, @TypeOf(v), fmt) {
         return .new(self, v);
     }
 
@@ -110,11 +105,11 @@ pub const Style = struct {
             forceNoStyle(false);
             try testing.expectEqualStrings(
                 "\x1b[0;1mhello\x1b[0m",
-                try sprint(&buffer, "{s}", .{new().set(.bold).value("hello")}),
+                try sprint(&buffer, "{f}", .{new().set(.bold).value("hello", "s")}),
             );
             try testing.expectEqualStrings(
                 "\x1b[0;1mcc\x1b[0m",
-                try sprint(&buffer, "{x}", .{new().set(.bold).value(@as(u16, 0xcc))}),
+                try sprint(&buffer, "{f}", .{new().set(.bold).value(@as(u16, 0xcc), "x")}),
             );
         }
     };
@@ -136,25 +131,25 @@ pub const Style = struct {
         unreachable;
     }
 
-    fn stringifyCSI(self: Self, w: anytype, csi: bool) @TypeOf(w).Error!void {
+    fn stringifyCSI(self: Self, w: *Writer, csi: bool) Writer.Error!void {
         var first = true;
         if (self.flag_strict) {
-            if (csi) try formatAny(ctl.ESCSequence.CSI, w);
-            try formatInt(SGR.reset, w);
+            if (csi) try ctl.ESCSequence.CSI.format(w);
+            try w.printInt(SGR.reset, 10, .lower, .{});
             first = false;
         }
         inline for (std.meta.fields(Storage)) |field| {
             if (self.field_get(field.name)) {
-                if (csi and first) try formatAny(ctl.ESCSequence.CSI, w);
+                if (csi and first) try ctl.ESCSequence.CSI.format(w);
                 if (!first) try w.writeByte(sep);
                 @setEvalBranchQuota(100000);
-                try formatter.dEnum(std.meta.stringToEnum(SGR.Style, field.name).?, w);
+                try w.printInt(@intFromEnum(std.meta.stringToEnum(SGR.Style, field.name).?), 10, .lower, .{});
                 first = false;
             }
         }
-        if (csi and !first) try formatAny(ctl.CSISequenceFunction.SGR, w);
+        if (csi and !first) try ctl.CSISequenceFunction.SGR.format(w);
     }
-    fn stringifyEnv(self: Self, w: anytype) @TypeOf(w).Error!void {
+    fn stringifyEnv(self: Self, w: *Writer) Writer.Error!void {
         if (Flag(.NO_STYLE).check()) return;
         try self.stringify(w);
     }
@@ -223,20 +218,20 @@ pub const Color = struct {
         return colorHex(c);
     }
 
-    pub fn fprint(self: Self, w: anytype, comptime fmt: []const u8, args: anytype) @TypeOf(w).Error!void {
+    pub fn fprint(self: Self, w: *Writer, comptime fmt: []const u8, args: anytype) Writer.Error!void {
         try self.stringifyEnv(w);
         try std.fmt.format(w, fmt, args);
     }
-    pub fn format(self: Self, comptime _: []const u8, _: FormatOptions, w: anytype) @TypeOf(w).Error!void {
+    pub fn format(self: Self, w: *Writer) Writer.Error!void {
         try self.stringifyEnv(w);
     }
-    pub fn stringify(self: Self, w: anytype) @TypeOf(w).Error!void {
+    pub fn stringify(self: Self, w: *Writer) Writer.Error!void {
         try self.stringifyCSI(w, true);
     }
     pub fn toString(self: Self) *const [helper.stringify(self).count():0]u8 {
         return helper.stringify(self).literal();
     }
-    pub fn value(self: Self, v: anytype) Value(Self, @TypeOf(v)) {
+    pub fn value(self: Self, v: anytype, comptime fmt: []const u8) Value(Self, @TypeOf(v), fmt) {
         return .new(self, v);
     }
 
@@ -273,45 +268,45 @@ pub const Color = struct {
                 "\x1b[0;38;2;1;2;3mhello\x1b[0m",
                 try sprint(
                     &buffer,
-                    "{s}",
-                    .{(colorHexS("#010203") catch unreachable).value("hello")},
+                    "{f}",
+                    .{(colorHexS("#010203") catch unreachable).value("hello", "s")},
                 ),
             );
             try testing.expectEqualStrings(
                 "\x1b[0;94mcc\x1b[0m",
-                try sprint(&buffer, "{x}", .{color8(.blue, true).value(@as(u16, 0xcc))}),
+                try sprint(&buffer, "{f}", .{color8(.blue, true).value(@as(u16, 0xcc), "x")}),
             );
         }
     };
 
-    fn stringifyCSI(self: Self, w: anytype, csi: bool) @TypeOf(w).Error!void {
-        if (csi) try formatAny(ctl.ESCSequence.CSI, w);
+    fn stringifyCSI(self: Self, w: *Writer, csi: bool) Writer.Error!void {
+        if (csi) try ctl.ESCSequence.CSI.format(w);
         if (self.flag_strict) {
-            try formatInt(SGR.reset, w);
+            try w.printInt(SGR.reset, 10, .lower, .{});
             try w.writeByte(sep);
         }
         switch (self.storage) {
             .default => {
                 var v = Color8.base(false) + Color8.default;
                 if (self.flag_bg) v += SGR.Color.offset;
-                try formatInt(v, w);
+                try w.printInt(v, 10, .lower, .{});
             },
             .color8 => |c| {
                 var v = Color8.base(self.flag_bright) + @intFromEnum(c);
                 if (self.flag_bg) v += SGR.Color.offset;
-                try formatInt(v, w);
+                try w.printInt(v, 10, .lower, .{});
             },
             inline .color256, .colorRGB => |c| {
                 var pre = SGR.Color.ColorX.pre;
                 if (self.flag_bg) pre += SGR.Color.offset;
-                try formatInt(pre, w);
+                try w.printInt(pre, 10, .lower, .{});
                 try w.writeByte(sep);
-                try formatAny(c, w);
+                try c.format(w);
             },
         }
-        if (csi) try formatAny(ctl.CSISequenceFunction.SGR, w);
+        if (csi) try ctl.CSISequenceFunction.SGR.format(w);
     }
-    fn stringifyEnv(self: Self, w: anytype) @TypeOf(w).Error!void {
+    fn stringifyEnv(self: Self, w: *Writer) Writer.Error!void {
         if (Flag(.NO_COLOR).check()) return;
         try self.stringify(w);
     }
@@ -357,20 +352,20 @@ pub const Attribute = struct {
         return self.field_set(@src().fn_name, v.bg());
     }
 
-    pub fn fprint(self: Self, w: anytype, comptime fmt: []const u8, args: anytype) @TypeOf(w).Error!void {
+    pub fn fprint(self: Self, w: *Writer, comptime fmt: []const u8, args: anytype) Writer.Error!void {
         try self.stringifyEnv(w);
-        try std.fmt.format(w, fmt, args);
+        try w.print(fmt, args);
     }
-    pub fn format(self: Self, comptime _: []const u8, _: FormatOptions, w: anytype) @TypeOf(w).Error!void {
+    pub fn format(self: Self, w: *Writer) Writer.Error!void {
         try self.stringifyEnv(w);
     }
-    pub fn stringify(self: Self, w: anytype) @TypeOf(w).Error!void {
+    pub fn stringify(self: Self, w: *Writer) Writer.Error!void {
         try self.stringifyCSI(w, true);
     }
     pub fn toString(self: Self) *const [helper.stringify(self).count():0]u8 {
         return helper.stringify(self).literal();
     }
-    pub fn value(self: Self, v: anytype) Value(Self, @TypeOf(v)) {
+    pub fn value(self: Self, v: anytype, comptime fmt: []const u8) Value(Self, @TypeOf(v), fmt) {
         return .new(self, v);
     }
 
@@ -518,8 +513,8 @@ pub const Attribute = struct {
                 forceNoColor(false);
                 forceNoStyle(true);
                 try testing.expectEqualStrings(
-                    try sprint(&buffer0, "{}", .{new().colorRGB(1, 2, 3).bold()}),
-                    try sprint(&buffer1, "{}", .{new().colorRGB(1, 2, 3).italic()}),
+                    try sprint(&buffer0, "{f}", .{new().colorRGB(1, 2, 3).bold()}),
+                    try sprint(&buffer1, "{f}", .{new().colorRGB(1, 2, 3).italic()}),
                 );
             }
         }
@@ -531,15 +526,21 @@ pub const Attribute = struct {
             forceNoStyle(false);
             try testing.expectEqualStrings(
                 "\x1b[0;1;21;32;47mhello\x1b[0m",
-                try sprint(&buffer, "{s}", .{attr.value("hello")}),
+                try sprint(&buffer, "{f}", .{attr.value("hello", "s")}),
             );
             try testing.expectEqualStrings(
                 "\x1b[0;1;21;32;47m00c1\x1b[0m",
-                try sprint(&buffer, "{x:04}", .{attr.value(@as(u32, 0xc1))}),
+                try sprint(&buffer, "{f}", .{attr.value(@as(u32, 0xc1), "x:04")}),
+            );
+            // See https://ziglang.org/download/0.15.1/release-notes.html#Format-Methods-No-Longer-Have-Format-Strings-or-Options
+            // The deleted FormatOptions are now for numbers only.
+            try testing.expectEqualStrings(
+                "\x1b[0;1;21;32;47m00c1\x1b[0m",
+                try sprint(&buffer, "{f:@<7}", .{attr.value(@as(u32, 0xc1), "x:0>4")}),
             );
             try testing.expectEqualStrings(
                 "\x1b[0;1;21;32;47mtrue\x1b[0m",
-                try sprint(&buffer, "{}", .{attr.value(true)}),
+                try sprint(&buffer, "{f}", .{attr.value(true, "")}),
             );
         }
         test "Attribute Writer" {
@@ -547,8 +548,8 @@ pub const Attribute = struct {
             var buffer = std.mem.zeroes([512]u8);
             forceNoColor(false);
             forceNoStyle(false);
-            var bs = std.io.fixedBufferStream(&buffer);
-            try attr.fprint(bs.writer(), "string {s} int {d}", .{ "hello", 6 });
+            var bs = Writer.fixed(&buffer);
+            try attr.fprint(&bs, "string {s} int {d}", .{ "hello", 6 });
             try testing.expectEqualStrings(
                 "\x1b[1;21;32;47mstring hello int 6",
                 std.mem.sliceTo(&buffer, 0),
@@ -573,16 +574,16 @@ pub const Attribute = struct {
         return self.color8(c);
     }
 
-    fn stringifyCSI(self: Self, w: anytype, csi: bool) @TypeOf(w).Error!void {
+    fn stringifyCSI(self: Self, w: *Writer, csi: bool) Writer.Error!void {
         var first = true;
         if (self.flag_strict) {
-            if (csi) try formatAny(ctl.ESCSequence.CSI, w);
-            try formatInt(SGR.reset, w);
+            if (csi) try ctl.ESCSequence.CSI.format(w);
+            try w.printInt(SGR.reset, 10, .lower, .{});
             first = false;
         }
         inline for (std.meta.fields(Storage)) |field| {
             if (@field(self.storage, field.name)) |v| {
-                if (csi and first) try formatAny(ctl.ESCSequence.CSI, w);
+                if (csi and first) try ctl.ESCSequence.CSI.format(w);
                 if (!first) try w.writeByte(sep);
                 var relaxed = v;
                 relaxed.flag_strict = false;
@@ -590,9 +591,9 @@ pub const Attribute = struct {
                 first = false;
             }
         }
-        if (csi and !first) try formatAny(ctl.CSISequenceFunction.SGR, w);
+        if (csi and !first) try ctl.CSISequenceFunction.SGR.format(w);
     }
-    fn stringifyEnv(self: Self, w: anytype) @TypeOf(w).Error!void {
+    fn stringifyEnv(self: Self, w: *Writer) Writer.Error!void {
         if (Flag(.NO_COLOR).check() and Flag(.NO_STYLE).check())
             return;
         var obj = self;
@@ -607,7 +608,7 @@ pub const Attribute = struct {
     }
 };
 
-pub fn Value(A: type, V: type) type {
+pub fn Value(A: type, V: type, comptime fmt: []const u8) type {
     return struct {
         a: A,
         v: V,
@@ -617,10 +618,10 @@ pub fn Value(A: type, V: type) type {
             return .{ .a = attr.strict(), .v = value };
         }
 
-        pub fn format(self: Self, comptime fmt: []const u8, options: FormatOptions, w: anytype) @TypeOf(w).Error!void {
-            try self.a.stringifyEnv(w);
-            try std.fmt.formatType(self.v, fmt, options, w, std.fmt.default_max_depth);
-            try Attribute.reset.stringifyEnv(w);
+        pub fn format(self: Self, writer: *Writer) Writer.Error!void {
+            try self.a.stringifyEnv(writer);
+            try writer.print(std.fmt.comptimePrint("{{{s}}}", .{fmt}), .{self.v});
+            try Attribute.reset.stringifyEnv(writer);
         }
     };
 }

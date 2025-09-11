@@ -1,6 +1,6 @@
 const std = @import("std");
+const Writer = std.Io.Writer;
 const alias = @import("helper").alias;
-const formatInt = @import("helper").formatter.dInt;
 
 pub const sep: u8 = ';';
 
@@ -95,19 +95,19 @@ pub const SGR = struct {
 
                 c: u8,
 
-                pub fn format(self: Self, comptime _: []const u8, _: alias.FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
-                    try formatInt(Self.pre, writer);
+                pub fn format(self: Self, writer: *Writer) Writer.Error!void {
+                    try writer.printInt(Self.pre, 10, .lower, .{});
                     try writer.writeByte(sep);
-                    return formatInt(self.c, writer);
+                    return writer.printInt(self.c, 10, .lower, .{});
                 }
 
                 pub const _test = struct {
                     const testing = std.testing;
                     const print = alias.print;
                     test Color256 {
-                        try testing.expectEqualStrings("5;66", print("{}", .{Self{ .c = 66 }}));
-                        try testing.expectEqualStrings("5;12", print("{}", .{Self{ .c = @intFromEnum(IBGR.blue) }}));
-                        try testing.expectEqualStrings("5;241", print("{}", .{Self{ .c = @intFromEnum(Grayscale.grey39) }}));
+                        try testing.expectEqualStrings("5;66", print("{f}", .{Self{ .c = 66 }}));
+                        try testing.expectEqualStrings("5;12", print("{f}", .{Self{ .c = @intFromEnum(IBGR.blue) }}));
+                        try testing.expectEqualStrings("5;241", print("{f}", .{Self{ .c = @intFromEnum(Grayscale.grey39) }}));
                     }
                 };
             };
@@ -120,21 +120,21 @@ pub const SGR = struct {
                 g: u8,
                 b: u8,
 
-                pub fn format(self: Self, comptime _: []const u8, _: alias.FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
-                    try formatInt(Self.pre, writer);
+                pub fn format(self: Self, writer: *Writer) Writer.Error!void {
+                    try writer.printInt(Self.pre, 10, .lower, .{});
                     try writer.writeByte(sep);
-                    try formatInt(self.r, writer);
+                    try writer.printInt(self.r, 10, .lower, .{});
                     try writer.writeByte(sep);
-                    try formatInt(self.g, writer);
+                    try writer.printInt(self.g, 10, .lower, .{});
                     try writer.writeByte(sep);
-                    return formatInt(self.b, writer);
+                    return writer.printInt(self.b, 10, .lower, .{});
                 }
 
                 pub const _test = struct {
                     const testing = std.testing;
                     const print = alias.print;
                     test ColorRGB {
-                        try testing.expectEqualStrings("2;1;2;3", print("{}", .{Self{ .r = 1, .g = 2, .b = 3 }}));
+                        try testing.expectEqualStrings("2;1;2;3", print("{f}", .{Self{ .r = 1, .g = 2, .b = 3 }}));
                     }
                 };
             };

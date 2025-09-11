@@ -1,7 +1,6 @@
 const std = @import("std");
+const Writer = std.Io.Writer;
 const alias = @import("helper").alias;
-const FormatOptions = alias.FormatOptions;
-const formatter = @import("helper").formatter;
 
 pub const ControlCharater = enum(u8) {
     const Self = @This();
@@ -35,7 +34,7 @@ pub const ControlCharater = enum(u8) {
     /// is equivalent to `ESC [`
     CSI = 0x9B,
 
-    pub fn format(self: Self, comptime _: []const u8, _: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
+    pub fn format(self: Self, writer: *Writer) Writer.Error!void {
         return writer.writeByte(@intFromEnum(self));
     }
 
@@ -45,8 +44,8 @@ pub const ControlCharater = enum(u8) {
         test ControlCharater {
             try testing.expectEqual(0x0F, @intFromEnum(ControlCharater.SI));
             try testing.expectEqual(0x1B, @intFromEnum(ControlCharater.ESC));
-            try testing.expectEqualStrings("\x1b", print("{}", .{Self.ESC}));
-            try testing.expectEqualStrings("\x9b", print("{}", .{Self.CSI}));
+            try testing.expectEqualStrings("\x1b", print("{f}", .{Self.ESC}));
+            try testing.expectEqualStrings("\x9b", print("{f}", .{Self.CSI}));
         }
     };
 };
@@ -77,9 +76,9 @@ pub const ESCSequence = enum(u8) {
     /// Control Sequence Introducer
     CSI = '[',
 
-    pub fn format(self: ESCSequence, comptime _: []const u8, _: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
-        try formatter.any(ControlCharater.ESC, writer);
-        return formatter.cEnum(self, writer);
+    pub fn format(self: ESCSequence, writer: *Writer) Writer.Error!void {
+        try ControlCharater.ESC.format(writer);
+        return writer.printAsciiChar(@intFromEnum(self), .{});
     }
 
     /// `%` Start sequence selecting character set
@@ -94,7 +93,7 @@ pub const ESCSequence = enum(u8) {
         /// Select UTF-8 (obsolete)
         UTF8_Obsolete = '8',
 
-        pub fn format(self: Self, comptime _: []const u8, _: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
+        pub fn format(self: Self, writer: *Writer) Writer.Error!void {
             return format_with_pre(self, Self.pre, writer);
         }
     };
@@ -106,7 +105,7 @@ pub const ESCSequence = enum(u8) {
         /// DEC screen alignment test - fill screen with E's
         DECALN = '8',
 
-        pub fn format(self: Self, comptime _: []const u8, _: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
+        pub fn format(self: Self, writer: *Writer) Writer.Error!void {
             return format_with_pre(self, Self.pre, writer);
         }
     };
@@ -124,7 +123,7 @@ pub const ESCSequence = enum(u8) {
         /// Set palette, with parameter given in 7 hexadecimal digits nrrggbb after the final P. Here n is the color (0–15), and rrggbb indicates the red/green/blue values (0–255)
         Set = 'P',
 
-        pub fn format(self: Self, comptime _: []const u8, _: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
+        pub fn format(self: Self, writer: *Writer) Writer.Error!void {
             return format_with_pre(self, Self.pre, writer);
         }
     };
@@ -143,15 +142,15 @@ pub const ESCSequence = enum(u8) {
             /// Select user mapping - the map that is loaded by the utility mapscrn(8)
             User = 'K',
 
-            pub fn format(self: Self, comptime _: []const u8, _: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
+            pub fn format(self: Self, writer: *Writer) Writer.Error!void {
                 return format_with_pre(self, Self.pre, writer);
             }
         };
     }
-    fn format_with_pre(v: anytype, pre: u8, writer: anytype) @TypeOf(writer).Error!void {
-        try formatter.any(ControlCharater.ESC, writer);
+    fn format_with_pre(v: anytype, pre: u8, writer: *Writer) Writer.Error!void {
+        try ControlCharater.ESC.format(writer);
         try writer.writeByte(pre);
-        return formatter.cEnum(v, writer);
+        return writer.printAsciiChar(@intFromEnum(v), .{});
     }
 
     pub const _test = struct {
@@ -159,26 +158,26 @@ pub const ESCSequence = enum(u8) {
         const print = alias.print;
         test ESCSequence {
             try testing.expectEqual(']', @intFromEnum(ESCSequence.OSC));
-            try testing.expectEqualStrings("\x1b]", print("{}", .{ESCSequence.OSC}));
-            try testing.expectEqualStrings("\x1b[", print("{}", .{ESCSequence.CSI}));
+            try testing.expectEqualStrings("\x1b]", print("{f}", .{ESCSequence.OSC}));
+            try testing.expectEqualStrings("\x1b[", print("{f}", .{ESCSequence.CSI}));
         }
         test SelectCharSet {
             try testing.expectEqual('@', @intFromEnum(SelectCharSet.Default));
-            try testing.expectEqualStrings("\x1b%@", print("{}", .{SelectCharSet.Default}));
+            try testing.expectEqualStrings("\x1b%@", print("{f}", .{SelectCharSet.Default}));
         }
         test ScreenAlignTest {
             try testing.expectEqual('8', @intFromEnum(ScreenAlignTest.DECALN));
-            try testing.expectEqualStrings("\x1b#8", print("{}", .{ScreenAlignTest.DECALN}));
+            try testing.expectEqualStrings("\x1b#8", print("{f}", .{ScreenAlignTest.DECALN}));
         }
         test DefGxCharSet {
             try testing.expectEqual('B', @intFromEnum(DefG0CharSet.Default));
-            try testing.expectEqualStrings("\x1b(B", print("{}", .{DefG0CharSet.Default}));
+            try testing.expectEqualStrings("\x1b(B", print("{f}", .{DefG0CharSet.Default}));
             try testing.expectEqual('B', @intFromEnum(DefG1CharSet.Default));
-            try testing.expectEqualStrings("\x1b)B", print("{}", .{DefG1CharSet.Default}));
+            try testing.expectEqualStrings("\x1b)B", print("{f}", .{DefG1CharSet.Default}));
         }
         test Palette {
             try testing.expectEqual('R', @intFromEnum(Palette.Reset));
-            try testing.expectEqualStrings("\x1b]R", print("{}", .{Palette.Reset}));
+            try testing.expectEqualStrings("\x1b]R", print("{f}", .{Palette.Reset}));
         }
     };
 };
@@ -248,13 +247,13 @@ pub const CSISequenceFunction = enum(u8) {
     /// Move cursor to indicated column in current row
     HPA = '`',
 
-    pub fn format(self: Self, comptime _: []const u8, _: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
-        return formatter.cEnum(self, writer);
+    pub fn format(self: Self, writer: *Writer) Writer.Error!void {
+        return writer.printAsciiChar(@intFromEnum(self), .{});
     }
-    pub fn param(self: Self, writer: anytype, comptime fmt: []const u8, args: anytype) @TypeOf(writer).Error!void {
-        try formatter.any(ESCSequence.CSI, writer);
+    pub fn param(self: Self, writer: *Writer, comptime fmt: []const u8, args: anytype) Writer.Error!void {
+        try ESCSequence.CSI.format(writer);
         try writer.print(fmt, args);
-        try formatter.any(self, writer);
+        try self.format(writer);
     }
 
     pub const _test = struct {
@@ -262,7 +261,7 @@ pub const CSISequenceFunction = enum(u8) {
         const print = alias.print;
         test CSISequenceFunction {
             try testing.expectEqual('m', @intFromEnum(Self.SGR));
-            try testing.expectEqualStrings("m", print("{}", .{Self.SGR}));
+            try testing.expectEqualStrings("m", print("{f}", .{Self.SGR}));
         }
     };
 };
